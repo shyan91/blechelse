@@ -316,5 +316,14 @@
     });
   }
 
-  window.Ansagen = { TYPES, LANGS, compose, resolveChain, trainNumberParts, numberParts };
+  /** Readable name for a text-snippet clip path, e.g. "/dt/module_3_1/046.wav" → "Vorsicht bei der Einfahrt". */
+  const PHRASE_BY_PATH = new Map();
+  for (const p of Object.values(PHRASES)) {
+    for (const lang of ["dt", "en"]) if (p[lang]) PHRASE_BY_PATH.set(`/${lang}/${p.f}/${p[lang]}.wav`, p.label);
+  }
+  PHRASE_BY_PATH.set(GONG.cands[0], "Gong");
+  PHRASE_BY_PATH.set(GONG_DOORS.cands[0], "Gong (Abfahrt)");
+  const phraseLabel = (path) => PHRASE_BY_PATH.get(path) || null;
+
+  window.Ansagen = { TYPES, LANGS, compose, resolveChain, trainNumberParts, numberParts, phraseLabel };
 })();

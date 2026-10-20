@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const { TYPES, LANGS, compose, resolveChain } = window.Ansagen;
+  const { TYPES, LANGS, compose, resolveChain, phraseLabel } = window.Ansagen;
   const { Library, fold } = window.ClipLibrary;
   const Player = window.ClipPlayer;
 
@@ -31,6 +31,7 @@
     mit: [],                              // coupled trains
     teile: [],                            // splitting stations
     anschluesse: [],                      // connections: trains with zeit + gleis
+    custom: [],                           // Baukasten: free sequence of clip paths
   };
   let state = { ...DEFAULTS };
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")); } catch (_) {}
@@ -40,7 +41,7 @@
   /** Convert settings saved by older versions of the page. */
   function migrate(s) {
     const arr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
-    for (const k of ["vias", "zusatzhalt", "haltausfall", "teile", "gruende", "sonder", "mit", "anschluesse"]) s[k] = arr(s[k]);
+    for (const k of ["vias", "zusatzhalt", "haltausfall", "teile", "gruende", "sonder", "mit", "anschluesse", "custom"]) s[k] = arr(s[k]);
     if ("via1" in s || "via2" in s) { s.vias = [s.via1, s.via2].filter(Boolean); delete s.via1; delete s.via2; }
     if ("grund" in s) { if (s.grund) s.gruende = [s.grund]; delete s.grund; }
     if ("mit1" in s) {
@@ -340,6 +341,8 @@
     }));
 
     browserIndex = null;
+    if (!$("#view-custom").hidden) { renderCustomSearch(); renderSeq(); }
+    if (!$("#view-browser").hidden) renderBrowser();
   }
 
   // ------------------------------------------------------------ bind inputs
@@ -560,7 +563,10 @@
       b.classList.toggle("is-active", i >= 0);
       $(".ord", b).textContent = i >= 0 && state.sonder.length > 1 ? `${i + 1}.` : "";
     });
-    $("#o-gap-val").textContent = `${state.gap} ms`;
+    $("#o-gap-val").textContent = $("#k-gap-val").textContent = `${state.gap} ms`;
+    if (document.activeElement !== $("#o-gap")) $("#o-gap").value = state.gap;
+    if (document.activeElement !== $("#k-gap")) $("#k-gap").value = state.gap;
+    $("#o-hall").checked = $("#k-hall").checked = state.hall;
     renderLangs(type);
     renderDisplay(type);
     renderChain();
@@ -679,18 +685,33 @@
   let browserIndex = null;
   let singleLi = null, singleCtl = null;
 
+  /** Best readable name for any clip path. */
+  function clipLabel(p) {
+    const ph = phraseLabel(p);
+    if (ph) return ph;
+    const l = library.labelFor(p);
+    if (l === "module" || l === "literal" || !l) {
+      const segs = p.split("/");
+      return (p.startsWith("/gong/") ? "Gong " : "Baustein ") + segs[segs.length - 1].replace(/\.wav$/i, "");
+    }
+    // manifest descriptions carry a category prefix ("Station …", "grund: …"); show just the name
+    return l.replace(/^(Station|Zuggattung)\s+/, "").replace(/^(verspaetung|grund|sonderansagen):\s*/, "")
+      .replace(/^Zahl (\d+)_$/, "Zahl $1 … (mit Rest)");
+  }
+
   function buildBrowserIndex() {
     browserIndex = [...library.paths].sort().map((p) => {
-      const label = library.labelFor(p);
+      const label = clipLabel(p);
       return { p, label, key: fold(label + " " + p), lang: p.split("/")[1] };
     });
   }
 
-  function renderBrowser() {
+  /** Search the clip index; returns { res (max 250), total }. */
+  function searchClips(prefix) {
     if (!browserIndex) buildBrowserIndex();
-    const q = fold($("#b-search").value.trim());
-    const cat = $("#b-cat").value;
-    const lang = $("#b-lang").value;
+    const q = fold($(`#${prefix}-search`).value.trim());
+    const cat = $(`#${prefix}-cat`).value;
+    const lang = $(`#${prefix}-lang`).value;
     const terms = q.split(/\s+/).filter(Boolean);
     const res = [];
     let total = 0;
@@ -701,13 +722,19 @@
       total++;
       if (res.length < 250) res.push(it);
     }
-    $("#b-meta").textContent = `${total.toLocaleString("de-DE")} Treffer${total > res.length ? `, die ersten ${res.length} werden angezeigt` : ""}`;
-    $("#b-list").innerHTML = res.map((it) => `
+    $(`#${prefix}-meta`).textContent = `${total.toLocaleString("de-DE")} Treffer${total > res.length ? `, die ersten ${res.length} werden angezeigt` : ""}`;
+    return res;
+  }
+
+  const clipRow = (it, extra = "") => `
       <li data-path="${esc(it.p)}">
-        <button class="pb" type="button" aria-label="Abspielen"><svg><use href="#i-play"/></svg></button>
+        <button class="pb" type="button" aria-label="Anhören"><svg><use href="#i-play"/></svg></button>
         <div style="min-width:0"><div class="name">${esc(it.label)}</div><div class="path">${esc(it.p)}</div></div>
-        <span class="lang">${esc(LANGS[it.lang] || it.lang.toUpperCase())}</span>
-      </li>`).join("");
+        <div class="actions"><span class="lang">${esc(LANGS[it.lang] || it.lang.toUpperCase())}</span>${extra}</div>
+      </li>`;
+
+  function renderBrowser() {
+    $("#b-list").innerHTML = searchClips("b").map((it) => clipRow(it)).join("");
   }
 
   let browserTimer;
@@ -715,7 +742,9 @@
     clearTimeout(browserTimer);
     browserTimer = setTimeout(renderBrowser, 120);
   }));
-  $("#b-list").addEventListener("click", async (e) => {
+
+  /** Preview a single clip from a result list (play button toggles). */
+  async function previewClick(e) {
     const li = e.target.closest("li[data-path]");
     if (!li || !e.target.closest(".pb")) return;
     if (singleCtl) singleCtl.stop();
@@ -735,19 +764,171 @@
       $("use", li).setAttribute("href", "#i-play");
       toast("Clip konnte nicht abgespielt werden: " + err.message, true);
     }
+  }
+  $("#b-list").addEventListener("click", previewClick);
+
+  // ------------------------------------------------------------ Baukasten (free clip sequence)
+
+  let seqPlaying = null;
+  const seqItems = () => state.custom.map((p) => ({ label: clipLabel(p), cands: [p], kind: "custom" }));
+
+  function renderCustomSearch() {
+    const res = searchClips("k");
+    $("#k-list").innerHTML = res.map((it) => clipRow(it,
+      `<button class="add${state.custom.includes(it.p) ? " is-added" : ""}" type="button" aria-label="Hinzufügen" title="Zur eigenen Ansage hinzufügen"><svg><use href="#i-plus"/></svg></button>`)).join("");
+  }
+
+  function renderSeq() {
+    const list = $("#k-seq");
+    list.innerHTML = state.custom.map((p, i) => `
+      <li draggable="true" data-i="${i}">
+        <span class="grip" title="Ziehen zum Verschieben"><svg><use href="#i-grip"/></svg></span>
+        <span class="no">${i + 1}</span>
+        <div style="min-width:0"><div class="name">${esc(clipLabel(p))}</div><div class="path">${esc(p)}</div></div>
+        <span class="ops">
+          <button type="button" data-op="up" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}><svg><use href="#i-up"/></svg></button>
+          <button type="button" data-op="down" aria-label="Nach unten" ${i === state.custom.length - 1 ? "disabled" : ""}><svg><use href="#i-down"/></svg></button>
+          <button type="button" data-op="remove" aria-label="Entfernen"><svg><use href="#i-x"/></svg></button>
+        </span>
+      </li>`).join("");
+    const n = state.custom.length;
+    $("#k-count").textContent = n ? `${n} Clip${n === 1 ? "" : "s"}` : "";
+    $("#k-empty").hidden = n > 0;
+    $$("#k-list .add").forEach((b) => b.classList.toggle("is-added", state.custom.includes(b.closest("li").dataset.path)));
+    save();
+  }
+
+  function moveSeq(from, to) {
+    if (to < 0 || to >= state.custom.length || from === to) return;
+    const [x] = state.custom.splice(from, 1);
+    state.custom.splice(to, 0, x);
+    renderSeq();
+  }
+
+  let customTimer;
+  ["#k-search", "#k-cat", "#k-lang"].forEach((s) => $(s).addEventListener("input", () => {
+    clearTimeout(customTimer);
+    customTimer = setTimeout(renderCustomSearch, 120);
+  }));
+  $("#k-list").addEventListener("click", (e) => {
+    const add = e.target.closest(".add");
+    if (add) {
+      state.custom.push(add.closest("li").dataset.path);
+      renderSeq();
+      const seq = $("#k-seq");
+      seq.scrollTop = seq.scrollHeight;
+      return;
+    }
+    previewClick(e);
   });
+  $("#k-seq").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-op]");
+    if (!b) return;
+    const i = Number(b.closest("li").dataset.i);
+    if (b.dataset.op === "up") moveSeq(i, i - 1);
+    else if (b.dataset.op === "down") moveSeq(i, i + 1);
+    else { state.custom.splice(i, 1); renderSeq(); }
+  });
+
+  // drag & drop reordering
+  let dragFrom = -1;
+  $("#k-seq").addEventListener("dragstart", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (!li) return;
+    dragFrom = Number(li.dataset.i);
+    li.classList.add("is-dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(dragFrom));
+  });
+  $("#k-seq").addEventListener("dragover", (e) => {
+    if (dragFrom < 0) return;
+    e.preventDefault();
+    $$("#k-seq li").forEach((li) => li.classList.remove("drop-before"));
+    e.target.closest("li[data-i]")?.classList.add("drop-before");
+  });
+  $("#k-seq").addEventListener("drop", (e) => {
+    if (dragFrom < 0) return;
+    e.preventDefault();
+    const li = e.target.closest("li[data-i]");
+    let to = li ? Number(li.dataset.i) : state.custom.length - 1;
+    if (li && to > dragFrom) to -= 1; // insert before the target
+    moveSeq(dragFrom, to);
+  });
+  $("#k-seq").addEventListener("dragend", () => {
+    dragFrom = -1;
+    $$("#k-seq li").forEach((li) => li.classList.remove("drop-before", "is-dragging"));
+  });
+
+  $("#k-clear").addEventListener("click", () => { state.custom = []; renderSeq(); });
+
+  function setSeqPlayingUI(on) {
+    const btn = $("#k-play");
+    btn.classList.toggle("is-stop", on);
+    $("use", btn).setAttribute("href", on ? "#i-stop" : "#i-play");
+    $("span", btn).textContent = on ? "Stopp" : "Abspielen";
+    if (!on) $$("#k-seq li.is-current").forEach((li) => li.classList.remove("is-current"));
+  }
+
+  $("#k-play").addEventListener("click", async () => {
+    if (seqPlaying) { seqPlaying.stop(); return; }
+    if (!state.custom.length) return;
+    if (playing) playing.stop();
+    const btn = $("#k-play");
+    btn.disabled = true;
+    try {
+      seqPlaying = await Player.play(library, seqItems(), { gap: state.gap, hall: state.hall }, {
+        onClip: (i) => {
+          $$("#k-seq li.is-current").forEach((li) => li.classList.remove("is-current"));
+          if (i >= 0) $(`#k-seq li[data-i="${i}"]`)?.classList.add("is-current");
+        },
+        onEnd: () => { seqPlaying = null; setSeqPlayingUI(false); },
+      });
+      setSeqPlayingUI(true);
+    } catch (e) {
+      seqPlaying = null;
+      setSeqPlayingUI(false);
+      toast("Abspielen fehlgeschlagen: " + e.message, true);
+    }
+    btn.disabled = false;
+  });
+
+  $("#k-export").addEventListener("click", async () => {
+    if (!state.custom.length) return;
+    const btn = $("#k-export");
+    btn.disabled = true;
+    try {
+      const blob = await Player.renderWav(library, seqItems(), { gap: state.gap, hall: state.hall });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "Eigene_Ansage.wav";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast("Gespeichert: Eigene_Ansage.wav");
+    } catch (e) {
+      toast("Export fehlgeschlagen: " + e.message, true);
+    }
+    btn.disabled = false;
+  });
+
+  // gap + hall are shared with the generator
+  bind("k-hall", "hall", "checked");
+  bind("k-gap", "gap", "int");
 
   // ------------------------------------------------------------ views
 
   function showView(name) {
     $("#view-generator").hidden = name !== "generator";
     $("#view-browser").hidden = name !== "browser";
+    $("#view-custom").hidden = name !== "custom";
     $$(".tab").forEach((t) => {
       const on = t.dataset.view === name;
       t.classList.toggle("is-active", on);
       t.setAttribute("aria-selected", on);
     });
     if (name === "browser") renderBrowser();
+    if (name === "custom") { renderCustomSearch(); renderSeq(); }
   }
   $$(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
 

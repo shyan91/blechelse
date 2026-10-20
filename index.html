@@ -31,6 +31,9 @@
       <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z M20 20l-4-4"/></symbol>
       <symbol id="i-connect" viewBox="0 0 24 24"><path d="M4 7h11 M12 4l3 3-3 3 M20 17H9 M12 14l-3 3 3 3"/></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01 M15 6h.01 M9 12h.01 M15 12h.01 M9 18h.01 M15 18h.01"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></symbol>
       <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z M12 10v4 M12 17h.01"/></symbol>
@@ -45,6 +48,7 @@
       </a>
       <nav class="tabs" role="tablist" aria-label="Bereiche">
         <button class="tab is-active" role="tab" data-view="generator" aria-selected="true">Ansage</button>
+        <button class="tab" role="tab" data-view="custom" aria-selected="false">Baukasten</button>
         <button class="tab" role="tab" data-view="browser" aria-selected="false">Clip-Browser</button>
       </nav>
       <div class="topbar-actions">
@@ -194,6 +198,55 @@
           <div class="card chain-card">
             <div class="chain-head"><h3>Clip-Kette</h3><span class="muted small" id="chain-count"></span></div>
             <ol class="chain" id="chain"></ol>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================================ BAUKASTEN (free clip sequence) -->
+    <section id="view-custom" class="view" hidden>
+      <div class="layout custom-layout">
+        <div class="card custom-search">
+          <div class="card-head"><div><h2>Clips</h2><p class="muted">Suchen und mit + zur eigenen Ansage hinzufügen</p></div></div>
+          <div class="browser-bar">
+            <label class="search"><svg><use href="#i-search"/></svg><input id="k-search" type="search" placeholder="Bahnhof, Zuggattung, Zahl, Pfad …" /></label>
+            <select id="k-cat">
+              <option value="">Alle Kategorien</option>
+              <option value="ziele/">Bahnhöfe</option>
+              <option value="zuggattungen/">Zuggattungen</option>
+              <option value="module">Textbausteine</option>
+              <option value="gleise_zahlen/">Zahlen</option>
+              <option value="zeiten/">Zeiten &amp; Verspätungen</option>
+              <option value="gruende/">Gründe</option>
+              <option value="nza/">Sonderansagen</option>
+              <option value="gong/">Gongs</option>
+            </select>
+            <select id="k-lang">
+              <option value="">Alle Sprachen</option>
+              <option value="dt">Deutsch</option>
+              <option value="en">Englisch</option>
+              <option value="fr">Französisch</option>
+            </select>
+          </div>
+          <div class="browser-meta muted small" id="k-meta"></div>
+          <ul class="clip-list" id="k-list"></ul>
+        </div>
+
+        <aside class="side">
+          <div class="card player">
+            <div class="chain-head"><h3>Eigene Ansage</h3><span class="muted small" id="k-count"></span></div>
+            <ol class="seq" id="k-seq"></ol>
+            <p class="muted small" id="k-empty">Noch leer. Füge links Clips mit + hinzu.</p>
+            <div class="player-toggles">
+              <label class="switch sm"><input type="checkbox" id="k-hall" /><span class="track"></span><span>Bahnhofshall</span></label>
+            </div>
+            <label class="range"><span>Pause zwischen Clips <b id="k-gap-val">40 ms</b></span>
+              <input type="range" id="k-gap" min="0" max="400" step="10" value="40" /></label>
+            <div class="player-actions">
+              <button class="btn btn-primary btn-lg" id="k-play"><svg><use href="#i-play"/></svg><span>Abspielen</span></button>
+              <button class="btn btn-secondary btn-lg icon-only" id="k-export" title="Als WAV speichern" aria-label="Als WAV speichern"><svg><use href="#i-download"/></svg></button>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="k-clear"><svg><use href="#i-x"/></svg>Alles entfernen</button>
           </div>
         </aside>
       </div>
