@@ -560,20 +560,17 @@
 
   // ------------------------------------------------------------ theme + clock
 
+  // Light is the default; dark only when chosen with the theme button.
   const themeBtn = $("#theme-btn");
   function applyTheme(t) {
-    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-    const dark = t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-    $("use", themeBtn).setAttribute("href", dark ? "#i-sun" : "#i-moon");
+    document.documentElement.dataset.theme = t;
+    $("use", themeBtn).setAttribute("href", t === "dark" ? "#i-sun" : "#i-moon");
   }
-  let theme = null;
-  try { theme = localStorage.getItem("blechelse.theme"); } catch (_) {}
+  let theme = "light";
+  try { if (localStorage.getItem("blechelse.theme") === "dark") theme = "dark"; } catch (_) {}
   applyTheme(theme);
   themeBtn.addEventListener("click", () => {
-    const dark = document.documentElement.dataset.theme
-      ? document.documentElement.dataset.theme === "dark"
-      : matchMedia("(prefers-color-scheme: dark)").matches;
-    theme = dark ? "light" : "dark";
+    theme = theme === "dark" ? "light" : "dark";
     try { localStorage.setItem("blechelse.theme", theme); } catch (_) {}
     applyTheme(theme);
   });
