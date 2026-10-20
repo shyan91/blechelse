@@ -53,52 +53,14 @@
           <line id="clock-m" x1="50" y1="50" x2="50" y2="14" class="clock-hand clock-m"/>
           <g id="clock-s"><line x1="50" y1="60" x2="50" y2="22" class="clock-s"/><circle cx="50" cy="22" r="5" class="clock-s-dot"/></g>
         </svg>
-        <span class="lib-pill" id="lib-pill" title="Geladene Clips"><span class="dot"></span><span id="lib-pill-text">Keine Clips</span></span>
         <button class="icon-btn" id="theme-btn" title="Hell / Dunkel" aria-label="Farbschema wechseln"><svg><use href="#i-moon"/></svg></button>
       </div>
     </div>
   </header>
 
   <main>
-    <!-- ============================================ LOADING / SETUP -->
-    <section id="view-empty" class="view">
-      <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <span>Lade Clip-Verzeichnis …</span>
-      </div>
-      <div id="setup" hidden>
-        <div class="hero">
-          <div class="hero-copy">
-            <span class="eyebrow">Einrichtung</span>
-            <h1>Bitte Vorsicht: Hier fehlen noch die Clips.</h1>
-            <p class="lead">Diese Seite spielt Ansagen aus Audio-Clips ab, die auf dem Server liegen. Die Clips sind nicht im Repository. Wer die Seite hostet, muss sie selbst bereitstellen.</p>
-            <p class="muted small" id="setup-error"></p>
-          </div>
-          <div class="setup-card card">
-            <h3>So geht's</h3>
-            <ol class="setup-steps">
-              <li>Clips besorgen, z. B. mit <code>blechelse_scraper.py</code>.</li>
-              <li>Den Ordner als <code>clips/</code> neben <code>index.html</code> legen, mit <code>manifest.json</code> darin.</li>
-              <li>Oder lokal starten: <code>python3 serve.py --clips /pfad/zu/blechelse_wavs</code></li>
-              <li>Liegen die Clips woanders, in <code>config.js</code> <code>clipsUrl</code> setzen.</li>
-            </ol>
-          </div>
-        </div>
-        <pre class="tree" aria-label="Erwartete Ordnerstruktur">clips/
-├── manifest.json        <span class="muted">Liste aller Clips, liefert auch die Namen</span>
-├── gong/513/513_2.wav
-├── dt/
-│   ├── module/  module_3_1/
-│   ├── ziele/variante1|2/hoch|tief/&lt;Bahnhof&gt;.wav
-│   ├── zuggattungen/hoch/ice.wav …
-│   ├── gleise_zahlen/  zeiten/  gruende/  nza/
-├── en/ …
-└── fr/ …</pre>
-      </div>
-    </section>
-
     <!-- ============================================ GENERATOR -->
-    <section id="view-generator" class="view" hidden>
+    <section id="view-generator" class="view">
       <div class="type-strip" role="tablist" aria-label="Ansage-Typ" id="type-strip"></div>
 
       <div class="layout">
@@ -206,7 +168,6 @@
               <button class="btn btn-primary btn-lg" id="play-btn"><svg><use href="#i-play"/></svg><span>Ansage abspielen</span></button>
               <button class="btn btn-secondary btn-lg icon-only" id="export-btn" title="Als WAV speichern" aria-label="Als WAV speichern"><svg><use href="#i-download"/></svg></button>
             </div>
-            <p class="warn-line" id="missing-line" hidden><svg><use href="#i-warn"/></svg><span></span></p>
           </div>
 
           <div class="card chain-card">
@@ -248,7 +209,6 @@
 
   <footer class="footer">
     <span>Blechelse Ansagen-Studio · Inoffizielles Fanprojekt, nicht mit der Deutschen Bahn AG verbunden.</span>
-    <span id="lib-source" class="muted"></span>
   </footer>
 
   <div class="toast" id="toast" role="status" hidden></div>

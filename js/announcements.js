@@ -124,7 +124,7 @@
   }
 
   function station(id, lang, variants, catalog, fallbackLabel) {
-    if (!id) return { label: fallbackLabel || "Bahnhof fehlt", cands: [], kind: "station" };
+    if (!id) return { label: fallbackLabel || "Bahnhof wählen", cands: [], kind: "station" };
     return {
       label: catalog.stationName(id),
       cands: variants.map((v) => `/${lang}/ziele/${v}/${id}`),
@@ -154,10 +154,10 @@
     const vias = [s.via1, s.via2].filter(Boolean);
     const out = [phrase("nach", lang)];
     if (!vias.length) {
-      out.push(station(s.ziel, lang, END, catalog, "Ziel fehlt"));
+      out.push(station(s.ziel, lang, END, catalog, "Ziel wählen"));
       return out;
     }
-    out.push(station(s.ziel, lang, MID, catalog, "Ziel fehlt"), phrase("ueber", lang));
+    out.push(station(s.ziel, lang, MID, catalog, "Ziel wählen"), phrase("ueber", lang));
     if (vias.length === 2) {
       out.push(station(vias[0], lang, MID, catalog), phrase("und", lang));
     }
@@ -181,7 +181,7 @@
       const out = [
         phrase("gleis", lang), ...number(s.gleis, lang, "hoch"),
         phrase("einfahrt", lang), ...train(s, lang, true),
-        phrase("von", lang), station(s.von, lang, END, c, "Herkunft fehlt"),
+        phrase("von", lang), station(s.von, lang, END, c, "Herkunft wählen"),
         phrase(s.verspaetet ? "ankunftUrspr" : "ankunft", lang), ...time(s.zeit, lang),
       ];
       if (s.nichtEinsteigen) out.push(phrase("nichtEinsteigen", lang));
@@ -241,11 +241,12 @@
     return chain;
   }
 
-  /** Marks every item with the path that exists in the library (or ok=false). */
+  /** Puts the candidate the manifest knows about first (if there is a manifest). */
   function resolveChain(chain, library) {
     return chain.map((item) => {
-      const path = item.cands.find((p) => library.has(p));
-      return { ...item, path: path || item.cands[0] || null, ok: !!path };
+      const known = item.cands.find((p) => library.has(p));
+      const cands = known ? [known, ...item.cands.filter((p) => p !== known)] : item.cands;
+      return { ...item, cands };
     });
   }
 

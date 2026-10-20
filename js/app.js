@@ -1,4 +1,4 @@
-/* UI glue: form, preview display, clip chain, player, clip browser, loading. */
+/* UI glue: form, preview display, clip chain, player, clip browser. */
 (function () {
   "use strict";
 
@@ -180,12 +180,6 @@
       : `<p class="muted small">Keine Sonderansagen (nza/) im Clip-Ordner gefunden.</p>`;
     $$("#sonder-grid .chip").forEach((b) => b.addEventListener("click", () => { state.sonder = b.dataset.id; changed(); }));
 
-    const langs = Object.keys(LANGS).filter((l) => c.langs.has(l)).map((l) => LANGS[l]);
-    $("#lib-pill").classList.toggle("is-ready", library.size > 0);
-    $("#lib-pill-text").textContent = library.size
-      ? `${library.size.toLocaleString("de-DE")} Clips · ${langs.join(" ")}`
-      : "Keine Clips";
-    $("#lib-source").textContent = library.size ? library.source : "";
     browserIndex = null;
   }
 
@@ -252,7 +246,7 @@
     seg.classList.toggle("multi", langs.length > 1);
     seg.innerHTML = Object.entries(LANGS).map(([code, label]) => {
       const i = langs.indexOf(code);
-      const disabled = !type.langs.includes(code) || (library.size && !library.catalog.langs.has(code));
+      const disabled = !type.langs.includes(code);
       return `<button type="button" data-lang="${code}" class="${i >= 0 ? "is-on" : ""}" ${disabled ? "disabled" : ""}
         aria-pressed="${i >= 0}" title="${disabled ? "Für diesen Ansage-Typ nicht verfügbar" : "Sprache an/aus, Reihenfolge = Klickreihenfolge"}">
         <span class="ord">${i + 1}</span>${label}</button>`;
@@ -346,19 +340,9 @@
         html.push(`<li class="lang-sep">${LANGS[it.lang]}</li>`);
         lastLang = it.lang;
       }
-      const title = it.path ? it.path : "Für diese Sprache nicht aufgenommen";
-      html.push(`<li data-i="${i}" data-kind="${it.kind}" class="${it.ok ? "" : "is-missing"}" title="${esc(title)}"><span class="k"></span>${esc(it.label)}</li>`);
+      html.push(`<li data-i="${i}" data-kind="${it.kind}" title="${esc(it.cands[0] || "")}"><span class="k"></span>${esc(it.label)}</li>`);
     });
     $("#chain").innerHTML = html.join("");
-    const missing = chain.filter((c) => !c.ok).length;
-    $("#chain-count").textContent = `${chain.length} Clips`;
-    const line = $("#missing-line");
-    line.hidden = !missing || !library.size;
-    $("span", line).textContent = missing === chain.length
-      ? "Keiner der Clips ist in deinem Ordner. Stimmt die Ordnerstruktur?"
-      : `${missing} ${missing === 1 ? "Clip fehlt" : "Clips fehlen"} in deinem Ordner und ${missing === 1 ? "wird" : "werden"} übersprungen.`;
-    $("#play-btn").disabled = !playing && !chain.some((c) => c.ok);
-    $("#export-btn").disabled = !chain.some((c) => c.ok);
   }
 
   // ------------------------------------------------------------ main update
@@ -397,12 +381,10 @@
       $$("#chain li.is-current").forEach((li) => li.classList.remove("is-current"));
       $("#d-progress-bar").style.width = "0";
     }
-    btn.disabled = !on && !chain.some((c) => c.ok);
   }
 
   async function togglePlay() {
     if (playing) { playing.stop(); return; }
-    if (!library.size) return;
     const btn = $("#play-btn");
     btn.disabled = true;
     try {
@@ -515,9 +497,7 @@
       total++;
       if (res.length < 250) res.push(it);
     }
-    $("#b-meta").textContent = library.size
-      ? `${total.toLocaleString("de-DE")} Treffer${total > res.length ? `, die ersten ${res.length} werden angezeigt` : ""}`
-      : "Keine Clips geladen.";
+    $("#b-meta").textContent = `${total.toLocaleString("de-DE")} Treffer${total > res.length ? `, die ersten ${res.length} werden angezeigt` : ""}`;
     $("#b-list").innerHTML = res.map((it) => `
       <li data-path="${esc(it.p)}">
         <button class="pb" type="button" aria-label="Abspielen"><svg><use href="#i-play"/></svg></button>
@@ -556,16 +536,12 @@
   // ------------------------------------------------------------ views
 
   function showView(name) {
-    const hasLib = library.size > 0;
-    if (!hasLib) name = "empty";
-    $("#view-empty").hidden = name !== "empty";
     $("#view-generator").hidden = name !== "generator";
     $("#view-browser").hidden = name !== "browser";
     $$(".tab").forEach((t) => {
       const on = t.dataset.view === name;
       t.classList.toggle("is-active", on);
       t.setAttribute("aria-selected", on);
-      t.disabled = !hasLib;
     });
     if (name === "browser") renderBrowser();
   }
@@ -576,21 +552,10 @@
   async function loadClips() {
     const cfg = window.BLECHELSE_CONFIG || {};
     const url = new URLSearchParams(location.search).get("clips") || cfg.clipsUrl || "clips/";
-    try {
-      await library.loadRemote(url);
-      if (!library.size) throw new Error("manifest.json ist leer");
-    } catch (e) {
-      console.warn(e);
-      $("#loading").hidden = true;
-      $("#setup").hidden = false;
-      $("#setup-error").textContent = `Gesucht unter: ${new URL(url, location.href).href}manifest.json (${e.message})`;
-      showView("empty");
-      return;
-    }
+    await library.loadRemote(url);
     refreshCatalogUI();
     syncInputs();
     changed();
-    showView("generator");
   }
 
   // ------------------------------------------------------------ theme + clock
@@ -652,6 +617,6 @@
   refreshCatalogUI();
   syncInputs();
   changed();
-  showView("empty");
+  showView("generator");
   loadClips();
 })();

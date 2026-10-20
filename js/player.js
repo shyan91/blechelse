@@ -26,6 +26,32 @@
 
   function clearCache() { cache.clear(); }
 
+  /** Thrown when clips of an announcement cannot be loaded. */
+  class MissingClipsError extends Error {
+    constructor(items) {
+      super(`${items.length === 1 ? "Clip nicht gefunden" : items.length + " Clips nicht gefunden"}: ` +
+        items.slice(0, 3).map((it) => it.cands[0] ? `${it.label} (${it.cands[0]})` : it.label).join(", ") +
+        (items.length > 3 ? ` und ${items.length - 3} weitere` : ""));
+      this.items = items;
+    }
+  }
+
+  /** Decode the first candidate path that loads. */
+  async function decodeItem(library, item) {
+    for (const p of item.cands || []) {
+      try { return await decode(library, p); } catch (_) { /* try next */ }
+    }
+    return null;
+  }
+
+  /** Load every clip of the chain or throw MissingClipsError listing the ones that failed. */
+  async function loadAll(library, chain) {
+    const buffers = await Promise.all(chain.map((it) => decodeItem(library, it)));
+    const missing = chain.filter((_, i) => !buffers[i]);
+    if (missing.length) throw new MissingClipsError(missing);
+    return buffers;
+  }
+
   /** Synthetic impulse response: a big, tiled station hall. */
   function hallImpulse(c, seconds = 2.6, decay = 3.2) {
     const rate = c.sampleRate;
@@ -82,9 +108,8 @@
   async function play(library, chain, opts, callbacks = {}) {
     const c = audioContext();
     if (c.state === "suspended") await c.resume();
-    const playable = chain.map((it, i) => ({ it, i })).filter((x) => x.it.ok);
-    if (!playable.length) throw new Error("Keine abspielbaren Clips");
-    const buffers = await Promise.all(playable.map((x) => decode(library, x.it.path)));
+    const buffers = await loadAll(library, chain);
+    if (c.state === "suspended") await c.resume();
 
     const input = buildGraph(c, opts.hall);
     const { slots, total } = timeline(buffers, opts.gap);
@@ -103,7 +128,7 @@
       if (stopped) return;
       const t = c.currentTime - t0;
       const k = slots.findIndex((s) => t >= s.start && t < s.end);
-      const idx = k === -1 ? -1 : playable[k].i;
+      const idx = k;
       if (idx !== current) { current = idx; callbacks.onClip?.(idx); }
       callbacks.onProgress?.(Math.min(1, Math.max(0, t / total)));
       if (t >= tailEnd) return finish();
@@ -124,9 +149,7 @@
 
   /** Render the chain to a 16-bit mono WAV Blob (includes gap + hall). */
   async function renderWav(library, chain, opts) {
-    const playable = chain.filter((it) => it.ok);
-    if (!playable.length) throw new Error("Keine abspielbaren Clips");
-    const buffers = await Promise.all(playable.map((it) => decode(library, it.path)));
+    const buffers = await loadAll(library, chain);
     const rate = 44100;
     const { slots, total } = timeline(buffers, opts.gap);
     const length = Math.ceil((total + (opts.hall ? 2.4 : 0.1)) * rate);
@@ -163,7 +186,7 @@
 
   /** Play one single clip (clip browser). */
   async function playSingle(library, path, onEnd) {
-    return play(library, [{ ok: true, path }], { gap: 0, hall: false }, { onEnd });
+    return play(library, [{ label: path, cands: [path] }], { gap: 0, hall: false }, { onEnd });
   }
 
   window.ClipPlayer = { play, playSingle, renderWav, clearCache };

@@ -34,7 +34,7 @@
 
     async arrayBuffer(path) {
       const r = await fetch(this.remoteBase + path.slice(1));
-      if (!r.ok) throw new Error(`HTTP ${r.status} für ${path}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.arrayBuffer();
     }
 
@@ -42,9 +42,11 @@
 
     async loadRemote(base) {
       base = base.endsWith("/") ? base : base + "/";
-      const r = await fetch(base + "manifest.json", { cache: "no-cache" });
-      if (!r.ok) throw new Error(`Kein manifest.json unter ${base}`);
-      const manifest = await r.json();
+      let manifest = {};
+      try {
+        const r = await fetch(base + "manifest.json", { cache: "no-cache" });
+        if (r.ok) manifest = await r.json();
+      } catch (_) { /* no manifest: clips are still fetched directly */ }
       this.manifest = manifest;
       this.paths = new Set(Object.keys(manifest).map((p) => (p.startsWith("/") ? p : "/" + p)));
       this.remoteBase = new URL(base, location.href).href;
