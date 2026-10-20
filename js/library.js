@@ -1,14 +1,10 @@
 /*
- * The clip library: the .wav files the user provides.
+ * The clip library: the .wav files hosted next to the site (default: clips/).
+ * The clips are not part of the repository; whoever hosts the site provides them.
  *
- * Two ways to load it:
- *  - Local: the user picks / drops the clip folder. Files stay on their machine.
- *  - Hosted: a `clips/` folder (with manifest.json) next to index.html, or
- *    ?clips=<url> pointing at one. Used when the app is self-hosted.
- *
- * Paths are normalised to the server layout, e.g. "/dt/ziele/variante2/tief/8000105.wav".
- * manifest.json (written by blechelse_scraper.py) supplies readable names for
- * stations, train types, delays, reasons and special announcements.
+ * clips/manifest.json lists every clip ("/dt/ziele/variante2/tief/8000105.wav": "Station Berlin Hbf", ...)
+ * and supplies readable names for stations, train types, delays, reasons and
+ * special announcements. blechelse_scraper.py and serve.py both write it.
  */
 (function () {
   "use strict";
@@ -26,10 +22,9 @@
 
   class Library {
     constructor() {
-      this.files = new Map();   // path -> File (local mode)
       this.paths = new Set();   // every known clip path
       this.manifest = {};       // path -> description
-      this.remoteBase = null;   // base URL (hosted mode)
+      this.remoteBase = "";     // base URL of the clip folder
       this.source = "";
       this.buildCatalog();
     }
@@ -38,54 +33,22 @@
     has(path) { return !!path && this.paths.has(path); }
 
     async arrayBuffer(path) {
-      if (this.remoteBase) {
-        const r = await fetch(this.remoteBase + path.slice(1));
-        if (!r.ok) throw new Error(`HTTP ${r.status} for ${path}`);
-        return r.arrayBuffer();
-      }
-      const f = this.files.get(path);
-      if (!f) throw new Error(`Clip fehlt: ${path}`);
-      return f.arrayBuffer();
+      const r = await fetch(this.remoteBase + path.slice(1));
+      if (!r.ok) throw new Error(`HTTP ${r.status} für ${path}`);
+      return r.arrayBuffer();
     }
 
     // ------------------------------------------------------------ loading
-
-    /** files: iterable of {file, rel} */
-    async loadLocal(entries, label) {
-      const files = new Map();
-      let manifestFile = null;
-      for (const { file, rel } of entries) {
-        if (/(^|\/)manifest\.json$/i.test(rel)) {
-          // prefer the shallowest manifest.json
-          if (!manifestFile || rel.split("/").length < manifestFile.rel.split("/").length) manifestFile = { file, rel };
-          continue;
-        }
-        if (!/\.wav$/i.test(rel)) continue;
-        const p = normalisePath(rel);
-        if (p) files.set(p, file);
-      }
-      let manifest = {};
-      if (manifestFile) {
-        try { manifest = JSON.parse(await manifestFile.file.text()); } catch (e) { console.warn("manifest.json unreadable", e); }
-      }
-      this.files = files;
-      this.paths = new Set(files.keys());
-      this.manifest = manifest;
-      this.remoteBase = null;
-      this.source = label || "Lokaler Ordner";
-      this.buildCatalog();
-    }
 
     async loadRemote(base) {
       base = base.endsWith("/") ? base : base + "/";
       const r = await fetch(base + "manifest.json", { cache: "no-cache" });
       if (!r.ok) throw new Error(`Kein manifest.json unter ${base}`);
       const manifest = await r.json();
-      this.files = new Map();
       this.manifest = manifest;
       this.paths = new Set(Object.keys(manifest).map((p) => (p.startsWith("/") ? p : "/" + p)));
       this.remoteBase = new URL(base, location.href).href;
-      this.source = "Server: " + base;
+      this.source = "Clips: " + base;
       this.buildCatalog();
     }
 
@@ -172,45 +135,5 @@
     }
   }
 
-  // ------------------------------------------------------------ file gathering
-
-  /** From <input type=file webkitdirectory> */
-  function entriesFromInput(fileList) {
-    return Array.from(fileList, (file) => ({ file, rel: file.webkitRelativePath || file.name }));
-  }
-
-  /** From a drag & drop DataTransfer (folders are walked recursively). */
-  async function entriesFromDrop(dataTransfer, onProgress) {
-    const out = [];
-    const roots = Array.from(dataTransfer.items || [])
-      .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
-      .filter(Boolean);
-    if (!roots.length) return entriesFromInput(dataTransfer.files || []);
-
-    const readAll = (reader) => new Promise((resolve, reject) => {
-      const all = [];
-      const next = () => reader.readEntries((batch) => {
-        if (!batch.length) return resolve(all);
-        all.push(...batch);
-        next();
-      }, reject);
-      next();
-    });
-    const fileOf = (entry) => new Promise((resolve, reject) => entry.file(resolve, reject));
-
-    const stack = roots.map((e) => ({ entry: e, path: e.name }));
-    while (stack.length) {
-      const { entry, path } = stack.pop();
-      if (entry.isDirectory) {
-        const children = await readAll(entry.createReader());
-        for (const c of children) stack.push({ entry: c, path: path + "/" + c.name });
-      } else if (/\.(wav|json)$/i.test(entry.name)) {
-        out.push({ file: await fileOf(entry), rel: path });
-        if (onProgress && out.length % 500 === 0) onProgress(out.length);
-      }
-    }
-    return out;
-  }
-
-  window.ClipLibrary = { Library, entriesFromInput, entriesFromDrop, fold };
+  window.ClipLibrary = { Library, fold };
 })();

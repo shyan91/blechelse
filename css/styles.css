@@ -149,30 +149,20 @@ button, input, select { font: inherit; color: inherit; }
 main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 28px 24px 40px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
 
-/* onboarding */
+/* loading + setup */
+.loading { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 50vh; font-weight: 600; color: var(--muted); }
+.setup-card { padding: 22px 24px; align-self: center; }
+.setup-card h3 { font-size: 17px; margin-bottom: 12px; }
+.setup-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; color: var(--text-2); }
+.setup-steps li::marker { color: var(--red); font-weight: 800; }
 .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 32px; align-items: stretch; margin: 12px 0 28px; }
 .eyebrow { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--red); margin-bottom: 14px; }
 .hero h1 { font-size: clamp(32px, 4.4vw, 54px); line-height: 1.04; font-weight: 800; letter-spacing: -.035em; margin-bottom: 18px; }
 .lead { font-size: 18px; color: var(--text-2); max-width: 54ch; margin-bottom: 14px; }
 .hero-copy { padding: 18px 0; }
-.dropzone {
-  border: 2px dashed var(--border-strong); border-radius: 20px; background: var(--surface);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  padding: 40px 24px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
-  min-height: 300px;
-}
-.dropzone:hover, .dropzone.is-over { border-color: var(--red); background: color-mix(in srgb, var(--red) 4%, var(--surface)); }
-.dz-icon { width: 64px; height: 64px; border-radius: 18px; background: var(--red-soft); color: var(--red); display: grid; place-items: center; margin-bottom: 6px; }
-.dz-icon svg { width: 30px; height: 30px; }
-.dropzone strong { font-size: 18px; }
-.dz-progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-weight: 600; }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--border); border-top-color: var(--red); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
-.step { display: flex; gap: 14px; padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.step p { color: var(--muted); font-size: 14px; margin-top: 4px; }
-.step-no { width: 28px; height: 28px; border-radius: 50%; background: var(--text); color: var(--surface); display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none; }
 .tree {
   margin: 0; padding: 18px 20px; border-radius: var(--radius); background: var(--navy); color: #dfe7f7;
   font: 13px/1.6 var(--mono); overflow-x: auto;
@@ -366,9 +356,6 @@ input[type="range"] { width: 100%; accent-color: var(--red); height: 20px; }
 
 /* ------------------------------------------------------------ misc */
 .footer { max-width: 1320px; width: 100%; margin: 0 auto; padding: 18px 24px 28px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
-.drop-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(12, 30, 70, .82); display: grid; place-items: center; color: #fff; }
-.drop-overlay div { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 48px 64px; border: 2px dashed rgba(255,255,255,.6); border-radius: 24px; font-size: 20px; }
-.drop-overlay svg { width: 48px; height: 48px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 110; background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 .toast.is-error { background: var(--red); color: #fff; }
 
@@ -380,7 +367,6 @@ input[type="range"] { width: 100%; accent-color: var(--red); height: 20px; }
   .layout { grid-template-columns: 1fr; }
   .side { position: static; order: -1; }
   .hero { grid-template-columns: 1fr; }
-  .steps { grid-template-columns: 1fr; }
   .station-clock { display: none; }
 }
 @media (max-width: 720px) {
@@ -391,8 +377,6 @@ input[type="range"] { width: 100%; accent-color: var(--red); height: 20px; }
   .topbar-actions { gap: 8px; }
   .tabs { order: 3; width: 100%; }
   .tab { flex: 1; }
-  #load-btn span { display: none; }
-  #load-btn { padding: 8px; }
   .type-strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 16px; padding: 2px 16px 6px; }
   .type-btn { flex: 0 0 132px; scroll-snap-align: start; }
   .type-btn small { display: none; }

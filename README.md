@@ -2,7 +2,7 @@
 
 A web frontend for building German station announcements from Blechelse voice clips. Pick a train, destination, platform and time; the app chains the matching clips, plays them back (optionally with station-hall reverb) and exports the result as a WAV file.
 
-**The audio clips are not included.** Users load their own clip folder; files stay on their device.
+**The audio clips are not part of this repository.** The site loads them from its own server (`clips/` by default). Whoever hosts the site has to provide the clip folder.
 
 ## Features
 
@@ -13,36 +13,48 @@ A web frontend for building German station announcements from Blechelse voice cl
 - Gong on/off, gap between clips, "Bahnhofshall" reverb, WAV export
 - Clip browser to search and play any single clip
 - Light/dark theme, works on mobile
+- Shows a setup page when no clips are found
 
-## Usage
+## Hosting
 
-Open `index.html` in a browser (no build step, no server needed), then drag the clip folder onto the page or click **Ordner auswählen**.
+1. Get the clips, e.g. with `blechelse_scraper.py`. You get a folder like this:
 
-Expected folder layout (as produced by `blechelse_scraper.py`):
+   ```
+   blechelse_wavs/
+   ├── manifest.json      # list of all clips + readable names (stations etc.)
+   ├── gong/...
+   ├── dt/  module/ module_3_1/ ziele/ zuggattungen/ gleise_zahlen/ zeiten/ gruende/ nza/
+   ├── en/ ...
+   └── fr/ ...
+   ```
 
-```
-blechelse_wavs/
-├── manifest.json      # optional: gives stations etc. readable names
-├── gong/...
-├── dt/  module/ module_3_1/ ziele/ zuggattungen/ gleise_zahlen/ zeiten/ gruende/ nza/
-├── en/ ...
-└── fr/ ...
-```
+2. Serve the site with the clips:
 
-Without `manifest.json` everything still works, but stations are shown by their number.
+   **Dev server / simple hosting** (Python 3, no dependencies):
 
-### Self-hosting with clips
+   ```
+   python3 serve.py --clips /path/to/blechelse_wavs            # http://localhost:8000
+   python3 serve.py --clips /path/to/blechelse_wavs --host 0.0.0.0 --port 8080
+   ```
 
-Put the clip folder next to `index.html` as `clips/` (it must contain `manifest.json`) and serve the folder over HTTP. The app loads it automatically. Alternatively point to another location with `?clips=https://example.org/my-clips/`.
+   `serve.py` mounts the folder at `/clips/`. If it has no `manifest.json`, one is built from the files on disk (stations then show as numbers).
+
+   **Any static web server** (nginx, Apache, GitHub Pages, ...): copy or symlink the clip folder to `clips/` next to `index.html`. It must contain `manifest.json`. If yours doesn't, create it once with `python3 serve.py --clips /path/to/blechelse_wavs --write-manifest`.
+
+   **Clips on another server / CDN:** set `clipsUrl` in `config.js` (that server must allow CORS), or open the site with `?clips=https://example.org/clips/`.
+
+`clips/`, `blechelse_wavs/` and `*.wav` are in `.gitignore`, so clips can't be committed by accident.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
 | `index.html` | Page markup |
+| `config.js` | Where the clips are served from (`clipsUrl`) |
+| `serve.py` | Dev/hosting server that serves the site plus a clip folder |
 | `css/styles.css` | Styling (light/dark) |
 | `js/announcements.js` | Which clips make up each announcement type |
-| `js/library.js` | Loading the clip folder, catalog of stations/train types |
+| `js/library.js` | Loading the clip index from the server, catalog of stations/train types |
 | `js/player.js` | Gapless playback, reverb, WAV export (Web Audio API) |
 | `js/app.js` | UI |
 

@@ -1,0 +1,8 @@
+# Audio clips are provided by whoever hosts the site; they are never committed.
+clips/
+blechelse_wavs/
+*.wav
+*.part
+
+__pycache__/
+.DS_Store

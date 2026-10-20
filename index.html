@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Blechelse Ansagen-Studio</title>
-  <meta name="description" content="Bahnhofsansagen aus deinen eigenen Blechelse-Clips zusammenstellen, abspielen und als WAV exportieren." />
+  <meta name="description" content="Bahnhofsansagen zusammenstellen, abspielen und als WAV exportieren." />
   <meta name="theme-color" content="#EC0016" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23EC0016'/%3E%3Cpath d='M8 13h4l6-5v16l-6-5H8z' fill='white'/%3E%3Cpath d='M21 12.5a5 5 0 0 1 0 7M23.5 10a8.5 8.5 0 0 1 0 12' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -55,36 +55,37 @@
         </svg>
         <span class="lib-pill" id="lib-pill" title="Geladene Clips"><span class="dot"></span><span id="lib-pill-text">Keine Clips</span></span>
         <button class="icon-btn" id="theme-btn" title="Hell / Dunkel" aria-label="Farbschema wechseln"><svg><use href="#i-moon"/></svg></button>
-        <button class="btn btn-secondary btn-sm" id="load-btn"><svg><use href="#i-folder"/></svg><span>Clips laden</span></button>
       </div>
     </div>
   </header>
 
   <main>
-    <!-- ============================================ ONBOARDING -->
+    <!-- ============================================ LOADING / SETUP -->
     <section id="view-empty" class="view">
-      <div class="hero">
-        <div class="hero-copy">
-          <span class="eyebrow">Bahnhofsansagen-Generator</span>
-          <h1>Bitte Vorsicht bei der Einfahrt.</h1>
-          <p class="lead">Stell Ansagen aus deinen eigenen Blechelse-Clips zusammen: Einfahrt, Verspätung, Gleiswechsel und mehr. Abspielen mit Bahnhofshall, als WAV exportieren.</p>
-          <p class="muted small">Die Clips werden nicht mitgeliefert. Lade deinen Clip-Ordner, die Dateien bleiben auf deinem Gerät.</p>
-        </div>
-        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Clip-Ordner auswählen oder hierher ziehen">
-          <div class="dz-icon"><svg><use href="#i-folder"/></svg></div>
-          <strong>Clip-Ordner hierher ziehen</strong>
-          <span class="muted">oder</span>
-          <button class="btn btn-primary" id="dz-btn" type="button"><svg><use href="#i-folder"/></svg>Ordner auswählen</button>
-          <div class="dz-progress" id="dz-progress" hidden><div class="spinner"></div><span id="dz-progress-text">Lese Dateien …</span></div>
-        </div>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <span>Lade Clip-Verzeichnis …</span>
       </div>
-      <div class="steps">
-        <div class="step"><span class="step-no">1</span><div><strong>Clips besorgen</strong><p>Zum Beispiel mit <code>blechelse_scraper.py</code>. Der Ordner enthält <code>dt/</code>, <code>en/</code>, <code>fr/</code> und <code>gong/</code>.</p></div></div>
-        <div class="step"><span class="step-no">2</span><div><strong>Ordner laden</strong><p>Liegt eine <code>manifest.json</code> im Ordner, erscheinen Bahnhöfe mit Namen statt mit Nummer.</p></div></div>
-        <div class="step"><span class="step-no">3</span><div><strong>Ansage bauen</strong><p>Zug, Ziel und Gleis wählen, abspielen, als WAV speichern.</p></div></div>
-      </div>
-      <pre class="tree" aria-label="Erwartete Ordnerstruktur">blechelse_wavs/
-├── manifest.json        <span class="muted">optional, liefert Namen</span>
+      <div id="setup" hidden>
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">Einrichtung</span>
+            <h1>Bitte Vorsicht: Hier fehlen noch die Clips.</h1>
+            <p class="lead">Diese Seite spielt Ansagen aus Audio-Clips ab, die auf dem Server liegen. Die Clips sind nicht im Repository. Wer die Seite hostet, muss sie selbst bereitstellen.</p>
+            <p class="muted small" id="setup-error"></p>
+          </div>
+          <div class="setup-card card">
+            <h3>So geht's</h3>
+            <ol class="setup-steps">
+              <li>Clips besorgen, z. B. mit <code>blechelse_scraper.py</code>.</li>
+              <li>Den Ordner als <code>clips/</code> neben <code>index.html</code> legen, mit <code>manifest.json</code> darin.</li>
+              <li>Oder lokal starten: <code>python3 serve.py --clips /pfad/zu/blechelse_wavs</code></li>
+              <li>Liegen die Clips woanders, in <code>config.js</code> <code>clipsUrl</code> setzen.</li>
+            </ol>
+          </div>
+        </div>
+        <pre class="tree" aria-label="Erwartete Ordnerstruktur">clips/
+├── manifest.json        <span class="muted">Liste aller Clips, liefert auch die Namen</span>
 ├── gong/513/513_2.wav
 ├── dt/
 │   ├── module/  module_3_1/
@@ -93,6 +94,7 @@
 │   ├── gleise_zahlen/  zeiten/  gruende/  nza/
 ├── en/ …
 └── fr/ …</pre>
+      </div>
     </section>
 
     <!-- ============================================ GENERATOR -->
@@ -249,10 +251,9 @@
     <span id="lib-source" class="muted"></span>
   </footer>
 
-  <div class="drop-overlay" id="drop-overlay" hidden><div><svg><use href="#i-folder"/></svg><strong>Ordner loslassen zum Laden</strong></div></div>
   <div class="toast" id="toast" role="status" hidden></div>
-  <input type="file" id="dir-input" webkitdirectory directory multiple hidden />
 
+  <script src="config.js"></script>
   <script src="js/announcements.js"></script>
   <script src="js/library.js"></script>
   <script src="js/player.js"></script>

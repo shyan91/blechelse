@@ -3,7 +3,7 @@
   "use strict";
 
   const { TYPES, LANGS, compose, resolveChain } = window.Ansagen;
-  const { Library, entriesFromInput, entriesFromDrop, fold } = window.ClipLibrary;
+  const { Library, fold } = window.ClipLibrary;
   const Player = window.ClipPlayer;
 
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -402,7 +402,7 @@
 
   async function togglePlay() {
     if (playing) { playing.stop(); return; }
-    if (!library.size) { toast("Lade zuerst deinen Clip-Ordner.", true); return; }
+    if (!library.size) return;
     const btn = $("#play-btn");
     btn.disabled = true;
     try {
@@ -571,14 +571,19 @@
   }
   $$(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
 
-  // ------------------------------------------------------------ loading clips
+  // ------------------------------------------------------------ loading clips (from the server)
 
-  async function afterLoad() {
-    if (playing) playing.stop();
-    Player.clearCache();
-    if (!library.size) {
-      toast("Keine .wav-Clips gefunden. Wähle den Ordner, der dt/, en/ und gong/ enthält.", true);
-      refreshCatalogUI();
+  async function loadClips() {
+    const cfg = window.BLECHELSE_CONFIG || {};
+    const url = new URLSearchParams(location.search).get("clips") || cfg.clipsUrl || "clips/";
+    try {
+      await library.loadRemote(url);
+      if (!library.size) throw new Error("manifest.json ist leer");
+    } catch (e) {
+      console.warn(e);
+      $("#loading").hidden = true;
+      $("#setup").hidden = false;
+      $("#setup-error").textContent = `Gesucht unter: ${new URL(url, location.href).href}manifest.json (${e.message})`;
       showView("empty");
       return;
     }
@@ -586,67 +591,7 @@
     syncInputs();
     changed();
     showView("generator");
-    const named = library.catalog.stations.some((s) => !/^\d+(\.wav)?$/.test(s.name));
-    toast(`${library.size.toLocaleString("de-DE")} Clips geladen${named ? "" : " (ohne manifest.json, Bahnhöfe erscheinen als Nummer)"}`);
   }
-
-  function setLoading(on, text) {
-    $("#dz-progress").hidden = !on;
-    if (text) $("#dz-progress-text").textContent = text;
-  }
-
-  async function loadEntries(entries, label) {
-    setLoading(true, `Indexiere ${entries.length.toLocaleString("de-DE")} Dateien …`);
-    await new Promise((r) => setTimeout(r, 30));
-    try {
-      await library.loadLocal(entries, label);
-      await afterLoad();
-    } catch (e) {
-      console.error(e);
-      toast("Laden fehlgeschlagen: " + e.message, true);
-    }
-    setLoading(false);
-  }
-
-  const dirInput = $("#dir-input");
-  const openPicker = () => dirInput.click();
-  $("#load-btn").addEventListener("click", openPicker);
-  $("#dz-btn").addEventListener("click", (e) => { e.stopPropagation(); openPicker(); });
-  $("#dropzone").addEventListener("click", openPicker);
-  $("#dropzone").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); } });
-  dirInput.addEventListener("change", () => {
-    if (!dirInput.files.length) return;
-    const entries = entriesFromInput(dirInput.files);
-    const root = (entries[0]?.rel || "").split("/")[0];
-    loadEntries(entries, "Lokaler Ordner: " + root);
-    dirInput.value = "";
-  });
-
-  // drag & drop anywhere
-  let dragDepth = 0;
-  const overlay = $("#drop-overlay");
-  window.addEventListener("dragenter", (e) => {
-    if (!e.dataTransfer?.types?.includes("Files")) return;
-    e.preventDefault(); dragDepth++; overlay.hidden = false;
-  });
-  window.addEventListener("dragover", (e) => { if (e.dataTransfer?.types?.includes("Files")) e.preventDefault(); });
-  window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; overlay.hidden = true; } });
-  window.addEventListener("drop", async (e) => {
-    if (!e.dataTransfer?.types?.includes("Files")) return;
-    e.preventDefault();
-    dragDepth = 0; overlay.hidden = true;
-    showView("empty");
-    setLoading(true, "Lese Ordner …");
-    try {
-      const entries = await entriesFromDrop(e.dataTransfer, (n) => setLoading(true, `Lese Ordner … ${n.toLocaleString("de-DE")} Dateien`));
-      const root = (entries[0]?.rel || "").split("/")[0];
-      await loadEntries(entries, "Lokaler Ordner: " + root);
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-      toast("Ordner konnte nicht gelesen werden: " + err.message, true);
-    }
-  });
 
   // ------------------------------------------------------------ theme + clock
 
@@ -708,16 +653,5 @@
   syncInputs();
   changed();
   showView("empty");
-
-  // Self-hosted mode: ?clips=<url> or a clips/ folder next to index.html.
-  (async () => {
-    if (!/^https?:$/.test(location.protocol)) return;
-    const param = new URLSearchParams(location.search).get("clips");
-    try {
-      await library.loadRemote(param || "clips/");
-      await afterLoad();
-    } catch (e) {
-      if (param) toast("Clips unter " + param + " nicht gefunden: " + e.message, true);
-    }
-  })();
+  loadClips();
 })();
