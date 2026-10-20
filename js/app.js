@@ -9,41 +9,51 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const el = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
   const library = new Library();
   const STORAGE_KEY = "blechelse.studio.v1";
 
   // ------------------------------------------------------------ state
 
-  const STATION_FIELDS = ["ziel", "via1", "via2", "von", "nurBis",
-  ];
+  /** A train in a list (coupled trains, connections, "fährt weiter als"). */
+  const newTrain = (extra = {}) => ({ gattung: state.gattung || "ice", nummer: "", ziel: "", vias: [], ...extra });
+
   const DEFAULTS = {
     type: "einfahrt", langs: ["dt"], gong: true, hall: false, gap: 40,
     gattung: "ice", nummer: "1234", ersatz: false,
-    ziel: "", via1: "", via2: "", von: "",
+    ziel: "", vias: [], von: "",
     gleis: 7, zeit: "18:59", verspaetet: false, nichtEinsteigen: false,
-    delay: "", grund: "", gleisNeu: "", nurBis: "", zusatzhalt: [], haltausfall: [],
-    faelltAus: false, entschuldigung: false, sonder: "",
-    mit: [],    // coupled trains: [{ gattung, nummer, ziel, via }]
-    teile: [],  // splitting stations
+    weiter: false, weiterZug: null,      // Ankunft: train continues as another train
+    delay: "", gruende: [], gleisNeu: "", nurBis: "", zusatzhalt: [], haltausfall: [],
+    faelltAus: false, entschuldigung: false,
+    sonder: [],                           // special announcements, in order
+    mit: [],                              // coupled trains
+    teile: [],                            // splitting stations
+    anschluesse: [],                      // connections: trains with zeit + gleis
   };
   let state = { ...DEFAULTS };
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")); } catch (_) {}
-  // convert state saved by older versions
-  for (const k of ["zusatzhalt", "haltausfall", "teile"]) {
-    if (!Array.isArray(state[k])) state[k] = state[k] ? [state[k]] : [];
-  }
-  if (!Array.isArray(state.mit)) state.mit = [];
-  if ("mit1" in state) {
-    for (const n of [1, 2]) {
-      if (state.mit1 && state[`mit${n}`]) {
-        state.mit.push({ gattung: state[`mit${n}Gattung`], nummer: state[`mit${n}Nummer`], ziel: state[`mit${n}Ziel`], via: state[`mit${n}Via`] });
-      }
-    }
-    if (state.teilung) state.teile = [state.teil1, state.teil2].filter(Boolean);
-    for (const k of Object.keys(state)) if (/^(mit[12]|teil(ung|[12]))/.test(k)) delete state[k];
-  }
+  migrate(state);
   const save = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {} };
+
+  /** Convert settings saved by older versions of the page. */
+  function migrate(s) {
+    const arr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+    for (const k of ["vias", "zusatzhalt", "haltausfall", "teile", "gruende", "sonder", "mit", "anschluesse"]) s[k] = arr(s[k]);
+    if ("via1" in s || "via2" in s) { s.vias = [s.via1, s.via2].filter(Boolean); delete s.via1; delete s.via2; }
+    if ("grund" in s) { if (s.grund) s.gruende = [s.grund]; delete s.grund; }
+    if ("mit1" in s) {
+      for (const n of [1, 2]) {
+        if (s.mit1 && s[`mit${n}`]) s.mit.push({ gattung: s[`mit${n}Gattung`], nummer: s[`mit${n}Nummer`], ziel: s[`mit${n}Ziel`], vias: arr(s[`mit${n}Via`]) });
+      }
+      if (s.teilung) s.teile = [s.teil1, s.teil2].filter(Boolean);
+      for (const k of Object.keys(s)) if (/^(mit[12]|teil(ung|[12]))/.test(k)) delete s[k];
+    }
+    for (const t of [...s.mit, ...s.anschluesse, s.weiterZug].filter(Boolean)) {
+      if (!Array.isArray(t.vias)) { t.vias = arr(t.via); delete t.via; }
+    }
+  }
 
   // ------------------------------------------------------------ toast
 
@@ -66,13 +76,12 @@
       this.clearable = root.hasAttribute("data-clearable");
       this.onChange = onChange;
       this.value = "";
-      root.innerHTML = `<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(root.dataset.placeholder || "")}" />
+      root.innerHTML = `<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(root.dataset.placeholder || "Bahnhof suchen …")}" />
         ${this.clearable ? '<button type="button" class="combo-clear" aria-label="Leeren" hidden><svg><use href="#i-x"/></svg></button>' : ""}
         <ul class="combo-list" role="listbox" hidden></ul>`;
       this.input = $("input", root);
       this.list = $("ul", root);
       this.clearBtn = $(".combo-clear", root);
-      this.items = [];
       this.active = 0;
 
       this.input.addEventListener("focus", () => { this.input.select(); this.open(""); });
@@ -106,7 +115,6 @@
         }
         res = starts.concat(contains).slice(0, 60);
       }
-      this.items = res;
       this.active = 0;
       if (!res.length) {
         this.list.innerHTML = `<li class="combo-empty">Kein Bahnhof gefunden</li>`;
@@ -156,7 +164,129 @@
     }
   }
 
-  const combos = $$(".combo").map((el) => new Combo(el, (field, id) => { state[field] = id; changed(); }));
+  // single-station fields in the static form (Nach, Von, Nur bis)
+  const combos = $$("form > fieldset .combo, form .grid .combo")
+    .filter((c) => !c.closest(".station-list, .train-list"))
+    .map((root) => new Combo(root, (field, id) => { state[field] = id; changed(); }));
+
+  // ------------------------------------------------------------ list editors (unlimited entries)
+
+  function addButton(label, onClick) {
+    const b = el(`<button type="button" class="btn btn-secondary btn-sm sl-add"><svg><use href="#i-plus"/></svg>${esc(label)}</button>`);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  /** Editable list of stations, stored in `arr` (mutated in place). */
+  function stationListEditor(box, arr, addLabel = "Bahnhof hinzufügen") {
+    box.innerHTML = "";
+    arr.forEach((id, i) => {
+      const row = el(`<div class="sl-row"><div class="combo"></div>
+        <button type="button" class="sl-remove" aria-label="Bahnhof entfernen" title="Entfernen"><svg><use href="#i-x"/></svg></button></div>`);
+      new Combo($(".combo", row), (_, newId) => { arr[i] = newId; changed(); }).set(id);
+      $(".sl-remove", row).addEventListener("click", () => { arr.splice(i, 1); stationListEditor(box, arr, addLabel); changed(); });
+      box.appendChild(row);
+    });
+    box.appendChild(addButton(addLabel, () => {
+      arr.push("");
+      stationListEditor(box, arr, addLabel);
+      changed();
+      $$(".sl-row input", box).pop()?.focus();
+    }));
+  }
+
+  /** Editable list of dropdown values (e.g. reasons), stored in `arr`. */
+  function selectListEditor(box, arr, items, addLabel) {
+    box.innerHTML = "";
+    arr.forEach((id, i) => {
+      const row = el(`<div class="sl-row"><select></select>
+        <button type="button" class="sl-remove" aria-label="Entfernen" title="Entfernen"><svg><use href="#i-x"/></svg></button></div>`);
+      const sel = $("select", row);
+      fillSelect(sel, items, null, id);
+      arr[i] = sel.value;
+      sel.addEventListener("change", () => { arr[i] = sel.value; changed(); });
+      $(".sl-remove", row).addEventListener("click", () => { arr.splice(i, 1); selectListEditor(box, arr, items, addLabel); changed(); });
+      box.appendChild(row);
+    });
+    if (items.length) {
+      box.appendChild(addButton(addLabel, () => {
+        arr.push(items[0].id);
+        selectListEditor(box, arr, items, addLabel);
+        changed();
+      }));
+    }
+  }
+
+  /** One train: type, number, destination, any number of "über" stations, optional time/platform. */
+  function trainCard(t, opts) {
+    const c = library.catalog;
+    if (!c.gattungen.find((g) => g.id === t.gattung)) t.gattung = c.gattungen[0]?.id || t.gattung || "";
+    if (!Array.isArray(t.vias)) t.vias = [];
+    const card = el(`<div class="train-card">
+        ${opts.title || opts.onRemove ? `<div class="train-card-head"><strong>${esc(opts.title || "")}</strong>
+          ${opts.onRemove ? '<button type="button" class="btn btn-ghost btn-sm" data-remove><svg><use href="#i-x"/></svg>Entfernen</button>' : ""}</div>` : ""}
+        <div class="grid g-2">
+          <label class="field"><span>Zuggattung</span><select data-k="gattung"></select></label>
+          <label class="field"><span>Zugnummer</span><input data-k="nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 5678" /></label>
+          <div class="field field-wide"><span>Nach</span><div class="combo" data-field="ziel"></div></div>
+          <div class="field field-wide"><span>Über <em class="opt">optional</em></span><div class="station-list"></div></div>
+          ${opts.withTime ? '<label class="field"><span>Abfahrt</span><input data-k="zeit" type="time" /></label>' : ""}
+          ${opts.withGleis ? '<label class="field"><span>Gleis</span><input data-k="gleis" type="number" min="1" max="999" /></label>' : ""}
+        </div>
+      </div>`);
+    const sel = $("select", card);
+    fillSelect(sel, c.gattungen, null, t.gattung);
+    sel.addEventListener("change", () => { t.gattung = sel.value; changed(); });
+    for (const input of $$("input[data-k]", card)) {
+      const k = input.dataset.k;
+      input.value = t[k] ?? "";
+      input.addEventListener("input", () => {
+        if (k === "nummer") input.value = input.value.replace(/\D/g, "");
+        t[k] = k === "gleis" ? (parseInt(input.value, 10) || "") : input.value;
+        changed();
+      });
+    }
+    new Combo($(".combo", card), (_, id) => { t.ziel = id; changed(); }).set(t.ziel);
+    stationListEditor($(".station-list", card), t.vias, "Zwischenhalt hinzufügen");
+    $("[data-remove]", card)?.addEventListener("click", opts.onRemove);
+    return card;
+  }
+
+  /** Editable list of trains, stored in `arr`. */
+  function trainListEditor(box, arr, opts) {
+    box.innerHTML = "";
+    arr.forEach((t, i) => {
+      box.appendChild(trainCard(t, {
+        ...opts,
+        title: opts.title(i),
+        onRemove: () => { arr.splice(i, 1); trainListEditor(box, arr, opts); changed(); },
+      }));
+    });
+    box.appendChild(addButton(opts.addLabel, () => {
+      arr.push(opts.create());
+      trainListEditor(box, arr, opts);
+      changed();
+      $$(".train-card", box).pop()?.querySelector("input")?.focus();
+    }));
+  }
+
+  function renderLists() {
+    for (const box of $$("form > fieldset .station-list[data-list], form .grid .station-list[data-list]")) {
+      stationListEditor(box, state[box.dataset.list], box.dataset.add || "Bahnhof hinzufügen");
+    }
+    selectListEditor($("#gruende-list"), state.gruende, library.catalog.reasons, "Grund hinzufügen");
+    trainListEditor($("#mit-list"), state.mit, {
+      title: (i) => `Zug ${i + 2}`, addLabel: "Zug hinzufügen", create: () => newTrain(),
+    });
+    trainListEditor($("#anschluss-list"), state.anschluesse, {
+      title: (i) => `Anschluss ${i + 1}`, addLabel: "Anschluss hinzufügen", withTime: true, withGleis: true,
+      create: () => newTrain({ zeit: state.zeit || "18:59", gleis: 1 }),
+    });
+    if (!state.weiterZug) state.weiterZug = newTrain({ zeit: state.zeit || "18:59" });
+    const wbox = $("#weiter-card");
+    wbox.innerHTML = "";
+    wbox.appendChild(trainCard(state.weiterZug, { withTime: true }));
+  }
 
   // ------------------------------------------------------------ static UI
 
@@ -180,34 +310,34 @@
     const c = library.catalog;
     if (!c.gattungen.find((g) => g.id === state.gattung)) state.gattung = c.gattungen[0]?.id || "";
     fillSelect($("#f-gattung"), c.gattungen, null, state.gattung);
-
     fillSelect($("#f-delay"), c.delays, "Keine Angabe", state.delay);
-    fillSelect($("#f-grund"), c.reasons, "Kein Grund", state.grund);
 
-    // keep stored stations only if they exist in this library
-    // drop saved stations this clip folder doesn't have (only once the station list is loaded)
+    // drop saved stations / ids this clip folder doesn't have (only once the lists are loaded)
     if (c.stations.length) {
-      for (const f of STATION_FIELDS) {
-        if (state[f] && !c.stationMap.has(state[f])) state[f] = "";
-      }
-      for (const k of ["zusatzhalt", "haltausfall", "teile"]) {
-        state[k] = state[k].filter((id) => !id || c.stationMap.has(id));
-      }
-      for (const t of state.mit) {
-        if (t.ziel && !c.stationMap.has(t.ziel)) t.ziel = "";
-        if (t.via && !c.stationMap.has(t.via)) t.via = "";
+      const ok = (id) => !id || c.stationMap.has(id);
+      for (const f of ["ziel", "von", "nurBis"]) if (!ok(state[f])) state[f] = "";
+      for (const k of ["vias", "zusatzhalt", "haltausfall", "teile"]) state[k] = state[k].filter(ok);
+      for (const t of [...state.mit, ...state.anschluesse, state.weiterZug].filter(Boolean)) {
+        if (!ok(t.ziel)) t.ziel = "";
+        t.vias = (t.vias || []).filter(ok);
       }
     }
+    if (c.reasons.length) state.gruende = state.gruende.filter((g) => c.reasons.some((r) => r.id === g));
+    if (c.specials.length) state.sonder = state.sonder.filter((x) => c.specials.some((r) => r.id === x));
+
     const pickByName = (re) => (c.stations.find((s) => re.test(s.name)) || c.stations[0] || {}).id || "";
     if (!state.ziel) state.ziel = pickByName(/^München Hbf$/);
     if (!state.von) state.von = pickByName(/^Hamburg Hbf$/);
-    combos.forEach((cb) => cb.set(state[cb.field]));
+    if (!state.sonder.length && c.specials[0]) state.sonder = [c.specials[0].id];
 
-    if (!c.specials.find((s) => s.id === state.sonder)) state.sonder = c.specials[0]?.id || "";
     $("#sonder-grid").innerHTML = c.specials.length
-      ? c.specials.map((s) => `<button type="button" class="chip" data-id="${esc(s.id)}">${esc(s.name)}</button>`).join("")
+      ? c.specials.map((s) => `<button type="button" class="chip" data-id="${esc(s.id)}"><span class="ord"></span>${esc(s.name)}</button>`).join("")
       : `<p class="muted small">Keine Sonderansagen (nza/) im Clip-Ordner gefunden.</p>`;
-    $$("#sonder-grid .chip").forEach((b) => b.addEventListener("click", () => { state.sonder = b.dataset.id; changed(); }));
+    $$("#sonder-grid .chip").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.id;
+      state.sonder = state.sonder.includes(id) ? state.sonder.filter((x) => x !== id) : [...state.sonder, id];
+      changed();
+    }));
 
     browserIndex = null;
   }
@@ -215,13 +345,13 @@
   // ------------------------------------------------------------ bind inputs
 
   const bind = (id, key, kind = "value") => {
-    const el = $("#" + id);
+    const input = $("#" + id);
     const read = () => {
-      state[key] = kind === "checked" ? el.checked : kind === "int" ? (parseInt(el.value, 10) || "") : el.value;
+      state[key] = kind === "checked" ? input.checked : kind === "int" ? (parseInt(input.value, 10) || "") : input.value;
       changed();
     };
-    el.addEventListener(kind === "checked" ? "change" : "input", read);
-    if (kind !== "checked") el.addEventListener("change", read);
+    input.addEventListener(kind === "checked" ? "change" : "input", read);
+    if (kind !== "checked") input.addEventListener("change", read);
   };
   bind("f-gattung", "gattung");
   bind("f-nummer", "nummer");
@@ -230,8 +360,8 @@
   bind("f-zeit", "zeit");
   bind("f-verspaetet", "verspaetet", "checked");
   bind("f-nichtEinsteigen", "nichtEinsteigen", "checked");
+  bind("f-weiter", "weiter", "checked");
   bind("f-delay", "delay");
-  bind("f-grund", "grund");
   bind("f-gleisNeu", "gleisNeu", "int");
   bind("f-faelltAus", "faelltAus", "checked");
   bind("f-entschuldigung", "entschuldigung", "checked");
@@ -247,8 +377,6 @@
   }));
 
   function syncInputs() {
-    renderStationLists();
-    renderTrainList();
     $("#f-gattung").value = state.gattung;
     $("#f-nummer").value = state.nummer;
     $("#f-ersatz").checked = state.ersatz;
@@ -256,8 +384,8 @@
     $("#f-zeit").value = state.zeit;
     $("#f-verspaetet").checked = state.verspaetet;
     $("#f-nichtEinsteigen").checked = state.nichtEinsteigen;
+    $("#f-weiter").checked = state.weiter;
     $("#f-delay").value = state.delay;
-    $("#f-grund").value = state.grund;
     $("#f-gleisNeu").value = state.gleisNeu;
     $("#f-faelltAus").checked = state.faelltAus;
     $("#f-entschuldigung").checked = state.entschuldigung;
@@ -265,92 +393,7 @@
     $("#o-hall").checked = state.hall;
     $("#o-gap").value = state.gap;
     combos.forEach((cb) => cb.set(state[cb.field]));
-    renderStationLists();
-    renderTrainList();
-  }
-
-  // ------------------------------------------------------------ coupled trains (unlimited)
-
-  function renderTrainList() {
-    const box = $("#mit-list");
-    const c = library.catalog;
-    box.innerHTML = "";
-    state.mit.forEach((t, i) => {
-      if (!c.gattungen.find((g) => g.id === t.gattung)) t.gattung = c.gattungen[0]?.id || t.gattung || "";
-      const card = document.createElement("div");
-      card.className = "train-card";
-      card.innerHTML = `
-        <div class="train-card-head"><strong>Zug ${i + 2}</strong>
-          <button type="button" class="btn btn-ghost btn-sm" data-remove><svg><use href="#i-x"/></svg>Entfernen</button></div>
-        <div class="grid g-2">
-          <label class="field"><span>Zuggattung</span><select data-k="gattung"></select></label>
-          <label class="field"><span>Zugnummer</span><input data-k="nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 5678" /></label>
-          <div class="field"><span>Nach</span><div class="combo" data-field="ziel" data-placeholder="Bahnhof suchen …"></div></div>
-          <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="via" data-placeholder="Zwischenhalt" data-clearable></div></div>
-        </div>`;
-      const sel = $("select", card);
-      fillSelect(sel, c.gattungen, null, t.gattung);
-      sel.addEventListener("change", () => { t.gattung = sel.value; changed(); });
-      const nr = $("input[data-k=nummer]", card);
-      nr.value = t.nummer || "";
-      nr.addEventListener("input", () => { nr.value = nr.value.replace(/\D/g, ""); t.nummer = nr.value; changed(); });
-      $$(".combo", card).forEach((el) => {
-        const cb = new Combo(el, (field, id) => { t[field] = id; changed(); });
-        cb.set(t[el.dataset.field]);
-      });
-      $("[data-remove]", card).addEventListener("click", () => {
-        state.mit.splice(i, 1);
-        renderTrainList();
-        changed();
-      });
-      box.appendChild(card);
-    });
-    const add = document.createElement("button");
-    add.type = "button";
-    add.className = "btn btn-secondary btn-sm sl-add";
-    add.innerHTML = `<svg><use href="#i-plus"/></svg>Zug hinzufügen`;
-    add.addEventListener("click", () => {
-      state.mit.push({ gattung: state.gattung, nummer: "", ziel: "", via: "" });
-      renderTrainList();
-      changed();
-      $$(".train-card", box).pop()?.querySelector("input")?.focus();
-    });
-    box.appendChild(add);
-  }
-
-  // ------------------------------------------------------------ station lists (unlimited extra / skipped stops)
-
-  function renderStationLists() {
-    $$(".station-list").forEach((box) => {
-      const key = box.dataset.list;
-      const list = state[key];
-      box.innerHTML = "";
-      list.forEach((id, i) => {
-        const row = document.createElement("div");
-        row.className = "sl-row";
-        row.innerHTML = `<div class="combo" data-field="${key}" data-placeholder="Bahnhof suchen …"></div>
-          <button type="button" class="sl-remove" aria-label="Bahnhof entfernen" title="Entfernen"><svg><use href="#i-x"/></svg></button>`;
-        const cb = new Combo($(".combo", row), (_, newId) => { state[key][i] = newId; changed(); });
-        cb.set(id);
-        $(".sl-remove", row).addEventListener("click", () => {
-          state[key].splice(i, 1);
-          renderStationLists();
-          changed();
-        });
-        box.appendChild(row);
-      });
-      const add = document.createElement("button");
-      add.type = "button";
-      add.className = "btn btn-secondary btn-sm sl-add";
-      add.innerHTML = `<svg><use href="#i-plus"/></svg>Bahnhof hinzufügen`;
-      add.addEventListener("click", () => {
-        state[key].push("");
-        renderStationLists();
-        changed();
-        $$(".sl-row input", box).pop()?.focus();
-      });
-      box.appendChild(add);
-    });
+    renderLists();
   }
 
   // ------------------------------------------------------------ languages
@@ -382,26 +425,46 @@
   // ------------------------------------------------------------ preview display
 
   const REGIO = new Set(["re", "rb", "ire", "rex", "me", "erb", "erx", "hex", "x", "alx", "brb", "nob", "ola", "via"]);
+  const badgeClass = (g) => (g === "s" ? " is-sbahn" : REGIO.has(g) ? " is-regio" : "");
 
   function renderDisplay(type) {
     const c = library.catalog;
     const name = (id) => (id ? c.stationName(id) : "—");
+    const listText = (ids) => {
+      const n = (ids || []).filter(Boolean).map(name);
+      return n.length > 1 ? n.slice(0, -1).join(", ") + " und " + n[n.length - 1] : n[0] || "";
+    };
+    const viaText = (ids) => {
+      const n = (ids || []).filter(Boolean).map(name);
+      return n.length ? "über " + n.join(" – ") : "";
+    };
     const hhmm = () => new Date().toTimeString().slice(0, 5);
     let time = state.zeit || "--:--", via = "", dest = "", ticker = [], strike = false, showTrain = true;
+    let rows = []; // extra rows: coupled trains or connections
 
     switch (type.id) {
-      case "einfahrt": case "bereit": case "info": {
-        const vias = [state.via1, state.via2].filter(Boolean).map(name);
-        via = vias.length ? "über " + vias.join(" – ") : "";
+      case "einfahrt": case "bereit": case "info":
+        via = viaText(state.vias);
         dest = name(state.ziel);
         if (type.id === "bereit") ticker.push("Zug steht bereit");
         if (state.verspaetet && type.id === "einfahrt") ticker.push("Verspätung");
+        rows = state.mit.map((t) => ({ g: t.gattung, nr: t.nummer, to: name(t.ziel) }));
+        if (state.teile.some(Boolean) && type.id !== "info") ticker.push("Zugteilung in " + listText(state.teile));
         break;
-      }
       case "ankunft":
         via = "Aus"; dest = name(state.von);
-        ticker.push(state.nichtEinsteigen ? "Zug endet hier · Bitte nicht einsteigen" : "Zug endet hier");
-        if (state.verspaetet) ticker.push("Verspätung");
+        if (state.weiter && state.weiterZug) {
+          const w = state.weiterZug;
+          ticker.push(`Fährt weiter als ${c.gattungName(w.gattung)} ${w.nummer || ""} nach ${name(w.ziel)} um ${w.zeit || "--:--"}`.replace(/\s+/g, " "));
+        } else {
+          ticker.push(state.nichtEinsteigen ? "Zug endet hier · Bitte nicht einsteigen" : "Zug endet hier");
+          if (state.verspaetet) ticker.push("Verspätung");
+        }
+        break;
+      case "anschluss":
+        time = hhmm(); showTrain = false; via = "Ihre Anschlüsse";
+        dest = state.anschluesse.length === 1 ? "1 Anschlusszug" : `${state.anschluesse.length || "Keine"} Anschlusszüge`;
+        rows = state.anschluesse.map((a) => ({ g: a.gattung, nr: a.nummer, to: name(a.ziel), meta: `${a.zeit || "--:--"} · Gl. ${a.gleis || "–"}` }));
         break;
       case "tueren":
         time = hhmm(); showTrain = false; via = "Türen schließen selbsttätig"; dest = "Bitte einsteigen";
@@ -410,22 +473,14 @@
         time = hhmm(); showTrain = false; via = `Vorsicht an Gleis ${state.gleis || ""}`; dest = "Zugdurchfahrt";
         ticker.push("Bitte zurückbleiben");
         break;
-      case "sonder":
-        time = hhmm(); showTrain = false; via = "Hinweis"; dest = state.sonder ? c.specialName(state.sonder) : "—";
+      case "sonder": {
+        time = hhmm(); showTrain = false;
+        const names = state.sonder.map((id) => c.specialName(id));
+        via = names.length > 1 ? "Hinweise" : "Hinweis";
+        dest = names[0] || "—";
+        if (names.length > 1) ticker.push(...names);
         break;
-    }
-    const coupledRows = [];
-    if (["einfahrt", "bereit", "info"].includes(type.id)) {
-      for (const t of state.mit) {
-        coupledRows.push({ g: t.gattung, label: c.gattungName(t.gattung), nr: t.nummer, to: name(t.ziel) });
       }
-    }
-    const listText = (ids) => {
-      const n = ids.filter(Boolean).map(name);
-      return n.length > 1 ? n.slice(0, -1).join(", ") + " und " + n[n.length - 1] : n[0];
-    };
-    if (state.teile.some(Boolean) && ["einfahrt", "bereit"].includes(type.id)) {
-      ticker.push("Zugteilung in " + listText(state.teile));
     }
     if (type.id === "info") {
       if (state.delay) ticker.push(c.delayName(state.delay).replace(/min\b/, "Min.") + " später");
@@ -434,7 +489,7 @@
       if (state.zusatzhalt.some(Boolean)) ticker.push(`Hält zusätzlich in ${listText(state.zusatzhalt)}`);
       if (state.haltausfall.some(Boolean)) ticker.push(`Hält nicht in ${listText(state.haltausfall)}`);
       if (state.faelltAus) { ticker.push("Fällt heute aus"); strike = true; }
-      if (state.grund) ticker.push("Grund: " + c.reasonName(state.grund));
+      if (state.gruende.length) ticker.push("Grund: " + state.gruende.map((g) => c.reasonName(g)).join(", "));
       if (!ticker.length) ticker.push("Information");
     }
 
@@ -442,20 +497,20 @@
     const g = (state.gattung || "").toLowerCase();
     const badge = $("#d-badge");
     badge.textContent = c.gattungName(state.gattung) || "Zug";
-    badge.className = "d-badge" + (g === "s" ? " is-sbahn" : REGIO.has(g) ? " is-regio" : "");
+    badge.className = "d-badge" + badgeClass(g);
     $("#d-nr").textContent = state.nummer || "";
     $(".d-train").style.visibility = showTrain ? "" : "hidden";
+    $(".d-platform").style.visibility = type.id === "anschluss" || type.id === "sonder" ? "hidden" : "";
     $("#d-gleis").textContent = state.gleisNeu && type.id === "info" ? state.gleisNeu : (state.gleis || "–");
     $("#d-via").textContent = via;
     const d = $("#d-dest");
     d.textContent = dest || "—";
     d.classList.toggle("is-strike", strike);
-    const coupledEl = $("#d-coupled");
-    coupledEl.hidden = !coupledRows.length;
-    coupledEl.innerHTML = coupledRows.map((r) => {
-      const cls = r.g === "s" ? " is-sbahn" : REGIO.has(r.g) ? " is-regio" : "";
-      return `<div><span class="d-badge${cls}">${esc(r.label)}</span><span class="nr">${esc(r.nr || "")}</span><span class="to">${esc(r.to)}</span></div>`;
-    }).join("");
+    const rowsEl = $("#d-coupled");
+    rowsEl.hidden = !rows.length;
+    rowsEl.innerHTML = rows.map((r) => `<div><span class="d-badge${badgeClass(r.g)}">${esc(c.gattungName(r.g))}</span>` +
+      `<span class="nr">${esc(r.nr || "")}</span><span class="to">${esc(r.to)}</span>` +
+      (r.meta ? `<span class="meta">${esc(r.meta)}</span>` : "") + `</div>`).join("");
     const tick = $("#d-ticker");
     tick.hidden = !ticker.length;
     const text = ticker.length ? "+++ " + ticker.join(" +++ ") + " +++" : "";
@@ -493,9 +548,18 @@
     });
     $("#type-title").textContent = type.name;
     $("#type-desc").textContent = type.desc;
-    $$("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(type.id); });
+    $$("[data-show]").forEach((x) => { x.hidden = !x.dataset.show.split(" ").includes(type.id); });
+    $$("[data-if]").forEach((x) => { x.hidden = !state[x.dataset.if]; });
+    // with "fährt weiter als" the arrival time/flags don't apply
+    const weiter = type.id === "ankunft" && state.weiter;
+    $("#f-zeit").closest(".field").hidden = $("#f-zeit").closest(".field").hidden || weiter;
+    $("#f-nichtEinsteigen").closest(".switch").hidden = $("#f-nichtEinsteigen").closest(".switch").hidden || weiter;
     $("#zeit-label").textContent = type.id === "ankunft" ? "Ankunft" : "Abfahrt";
-    $$("#sonder-grid .chip").forEach((b) => b.classList.toggle("is-active", b.dataset.id === state.sonder));
+    $$("#sonder-grid .chip").forEach((b) => {
+      const i = state.sonder.indexOf(b.dataset.id);
+      b.classList.toggle("is-active", i >= 0);
+      $(".ord", b).textContent = i >= 0 && state.sonder.length > 1 ? `${i + 1}.` : "";
+    });
     $("#o-gap-val").textContent = `${state.gap} ms`;
     renderLangs(type);
     renderDisplay(type);
@@ -552,7 +616,7 @@
       if (["einfahrt", "ankunft", "bereit", "info"].includes(state.type)) {
         parts.push(c.gattungName(state.gattung) + (state.nummer || ""));
         parts.push(c.stationName(state.type === "ankunft" ? state.von : state.ziel));
-      } else if (state.type === "sonder") parts.push(c.specialName(state.sonder));
+      } else if (state.type === "sonder" && state.sonder[0]) parts.push(c.specialName(state.sonder[0]));
       const name = parts.join("_").replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_|_$/g, "") + ".wav";
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -582,26 +646,30 @@
 
   $("#random-btn").addEventListener("click", () => {
     const c = library.catalog;
-    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const rnd = (n) => Math.floor(Math.random() * n);
+    const pick = (arr) => arr[rnd(arr.length)];
     const big = c.stations.filter((s) => /Hbf$/.test(s.name));
     const pool = big.length > 10 ? big : c.stations;
     if (!pool.length) return;
     const main = c.gattungen.slice(0, 9);
+    const stations = (n) => Array.from({ length: n }, () => pick(pool).id);
+    const time = () => `${String(rnd(24)).padStart(2, "0")}:${String(rnd(59) + 1).padStart(2, "0")}`;
+    const randTrain = (extra) => ({ gattung: (pick(main) || {}).id || state.gattung, nummer: String(rnd(9999) + 1), ziel: pick(pool).id, vias: stations(rnd(2)), ...extra });
     state.gattung = (pick(main) || {}).id || state.gattung;
-    state.nummer = String(Math.floor(Math.random() * (Math.random() < .5 ? 999 : 9999)) + 1);
-    state.gleis = Math.floor(Math.random() * 18) + 1;
-    state.zeit = `${String(Math.floor(Math.random() * 24)).padStart(2, "0")}:${String(Math.floor(Math.random() * 59) + 1).padStart(2, "0")}`;
+    state.nummer = String(rnd(Math.random() < .5 ? 999 : 9999) + 1);
+    state.gleis = rnd(18) + 1;
+    state.zeit = time();
     state.ziel = pick(pool).id;
     state.von = pick(pool).id;
-    state.via1 = Math.random() < .5 ? pick(pool).id : "";
-    state.via2 = state.via1 && Math.random() < .4 ? pick(pool).id : "";
+    state.vias = stations(rnd(4));
     if (state.type === "info") {
       state.delay = (pick(c.delays) || {}).id || "";
-      state.grund = Math.random() < .7 ? (pick(c.reasons) || {}).id || "" : "";
-      state.gleisNeu = Math.random() < .3 ? Math.floor(Math.random() * 18) + 1 : "";
+      state.gruende = c.reasons.length && Math.random() < .7 ? [pick(c.reasons).id] : [];
+      state.gleisNeu = Math.random() < .3 ? rnd(18) + 1 : "";
       state.entschuldigung = Math.random() < .6;
     }
-    if (state.type === "sonder") state.sonder = (pick(c.specials) || {}).id || "";
+    if (state.type === "anschluss") state.anschluesse = Array.from({ length: rnd(3) + 1 }, () => randTrain({ zeit: time(), gleis: rnd(18) + 1 }));
+    if (state.type === "sonder" && c.specials.length) state.sonder = [pick(c.specials).id];
     syncInputs();
     changed();
   });
@@ -737,9 +805,9 @@
     update();
   })();
 
-  // keep "current time" fields in the display fresh for door/through/special types
+  // keep "current time" fields in the display fresh for types that show the clock time
   setInterval(() => {
-    if (["tueren", "durchfahrt", "sonder"].includes(state.type) && !$("#view-generator").hidden) {
+    if (["tueren", "durchfahrt", "sonder", "anschluss"].includes(state.type) && !$("#view-generator").hidden) {
       renderDisplay(TYPES.find((t) => t.id === state.type));
     }
   }, 15000);

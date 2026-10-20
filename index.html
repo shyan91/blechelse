@@ -30,6 +30,7 @@
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z M20 20l-4-4"/></symbol>
+      <symbol id="i-connect" viewBox="0 0 24 24"><path d="M4 7h11 M12 4l3 3-3 3 M20 17H9 M12 14l-3 3 3 3"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></symbol>
       <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z M12 10v4 M12 17h.01"/></symbol>
@@ -91,10 +92,7 @@
             <div class="grid g-1">
               <div class="field"><span>Nach</span><div class="combo" data-field="ziel" data-placeholder="Bahnhof suchen …"></div></div>
             </div>
-            <div class="grid g-2">
-              <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="via1" data-placeholder="Zwischenhalt" data-clearable></div></div>
-              <div class="field"><span>und über <em class="opt">optional</em></span><div class="combo" data-field="via2" data-placeholder="Zwischenhalt" data-clearable></div></div>
-            </div>
+            <div class="field"><span>Über <em class="opt">optional</em></span><div class="station-list" data-list="vias" data-add="Zwischenhalt hinzufügen"></div></div>
           </fieldset>
 
           <fieldset class="group" data-show="einfahrt bereit info">
@@ -110,6 +108,17 @@
           <fieldset class="group" data-show="ankunft">
             <legend>Herkunft</legend>
             <div class="field"><span>Von</span><div class="combo" data-field="von" data-placeholder="Bahnhof suchen …"></div></div>
+          </fieldset>
+
+          <fieldset class="group" data-show="ankunft">
+            <legend>Weiterfahrt</legend>
+            <label class="switch"><input type="checkbox" id="f-weiter" /><span class="track"></span><span>Zug fährt weiter als</span></label>
+            <div class="train-list" id="weiter-card" data-if="weiter"></div>
+          </fieldset>
+
+          <fieldset class="group" data-show="anschluss">
+            <legend>Anschlüsse</legend>
+            <div class="train-list" id="anschluss-list"></div>
           </fieldset>
 
           <fieldset class="group" data-show="einfahrt ankunft bereit info tueren durchfahrt">
@@ -128,8 +137,8 @@
             <legend>Information</legend>
             <div class="grid g-2">
               <label class="field"><span>Verspätung</span><select id="f-delay"></select></label>
-              <label class="field"><span>Grund</span><select id="f-grund"></select></label>
               <label class="field"><span>Gleiswechsel auf <em class="opt">optional</em></span><input id="f-gleisNeu" type="number" min="1" max="999" placeholder="—" /></label>
+              <div class="field"><span>Gründe <em class="opt">optional</em></span><div class="select-list" id="gruende-list"></div></div>
               <div class="field"><span>Fährt heute nur bis <em class="opt">optional</em></span><div class="combo" data-field="nurBis" data-placeholder="Bahnhof" data-clearable></div></div>
               <div class="field"><span>Hält zusätzlich in <em class="opt">optional</em></span><div class="station-list" data-list="zusatzhalt"></div></div>
               <div class="field"><span>Hält nicht in <em class="opt">optional</em></span><div class="station-list" data-list="haltausfall"></div></div>

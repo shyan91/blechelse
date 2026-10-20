@@ -34,6 +34,9 @@
     faelltAus:       { f: "module_3_1", dt: "014",  en: "015",  label: "fällt heute aus" },
     entschuldigung:  { f: "module_3_1", dt: "042",  en: "036",  label: "Entschuldigung" },
     mit:             { f: "module_3_1", dt: "031",  en: "039",  label: "zusammen mit" },
+    weiterAls:       { f: "module_3_1", dt: "040",  en: "006",  label: "fährt weiter als" },
+    anschluesse:     { f: "module_3_1", dt: "026",  en: "040",  label: "Ihre Anschlüsse" },
+    vonGleis:        { f: "module_3_1", dt: "039",  en: "014",  label: "von Gleis" },
     teilung:         { f: "module_3_1", dt: "045",  en: "030",  label: "Zugteilung in" },
     teilungEnde:     { f: "module_3_1", dt: "015",  en: "000",  label: "(Zugteilung)" },
     tuerenGleis:     { f: "module",     dt: "0048", en: "0021", label: "Am Gleis" },
@@ -56,6 +59,8 @@
       desc: "Zug steht am Gleis bereit" },
     { id: "info",       name: "Information",    icon: "info",    langs: ["dt", "en"],
       desc: "Verspätung, Gleiswechsel, Ausfall" },
+    { id: "anschluss",  name: "Anschlüsse",     icon: "connect", langs: ["dt", "en"],
+      desc: "Anschlusszüge mit Zeit und Gleis" },
     { id: "tueren",     name: "Abfahrt",        icon: "doors",   langs: ["dt", "en"],
       desc: "Einsteigen, Türen schließen" },
     { id: "durchfahrt", name: "Durchfahrt",     icon: "through", langs: ["dt"],
@@ -152,18 +157,17 @@
     return out;
   }
 
-  /** "nach Ziel" or "nach Ziel über Via1 und Via2" */
+  /** "nach Ziel" or "nach Ziel über A, B und C" (any number of stations in between) */
   function destination(s, lang, catalog) {
-    const vias = [s.via1, s.via2].filter(Boolean);
+    const vias = (s.vias || []).filter(Boolean);
     const out = [phrase("nach", lang)];
     if (!vias.length) {
       out.push(station(s.ziel, lang, END, catalog, "Ziel wählen"));
       return out;
     }
     out.push(station(s.ziel, lang, MID, catalog, "Ziel wählen"), phrase("ueber", lang));
-    if (vias.length === 2) {
-      out.push(station(vias[0], lang, MID, catalog), phrase("und", lang));
-    }
+    vias.slice(0, -1).forEach((id) => out.push(station(id, lang, MID, catalog)));
+    if (vias.length > 1) out.push(phrase("und", lang));
     out.push(station(vias[vias.length - 1], lang, VIA_END, catalog));
     return out;
   }
@@ -174,7 +178,7 @@
     for (const t of s.mit || []) {
       out.push(phrase("mit", lang));
       out.push(...train({ gattung: t.gattung, nummer: t.nummer, gattungLabel: c.gattungName(t.gattung) }, lang, false));
-      out.push(...destination({ ziel: t.ziel, via1: t.via }, lang, c));
+      out.push(...destination(t, lang, c));
     }
     return out;
   }
@@ -214,9 +218,18 @@
         phrase("gleis", lang), ...number(s.gleis, lang, "hoch"),
         phrase("einfahrt", lang), ...train(s, lang, true),
         phrase("von", lang), station(s.von, lang, END, c, "Herkunft wählen"),
-        phrase(s.verspaetet ? "ankunftUrspr" : "ankunft", lang), ...time(s.zeit, lang),
       ];
-      if (s.nichtEinsteigen) out.push(phrase("nichtEinsteigen", lang));
+      if (s.weiter && s.weiterZug) {
+        // the arriving train continues as another train
+        const w = s.weiterZug;
+        out.push(phrase("weiterAls", lang),
+          ...train({ gattung: w.gattung, nummer: w.nummer, gattungLabel: c.gattungName(w.gattung) }, lang, false),
+          ...destination(w, lang, c),
+          phrase("abfahrt", lang), ...time(w.zeit, lang));
+      } else {
+        out.push(phrase(s.verspaetet ? "ankunftUrspr" : "ankunft", lang), ...time(s.zeit, lang));
+        if (s.nichtEinsteigen) out.push(phrase("nichtEinsteigen", lang));
+      }
       out.push(phrase("vorsicht", lang));
       return out;
     },
@@ -245,7 +258,9 @@
       const skipped = (s.haltausfall || []).filter(Boolean);
       if (skipped.length) out.push(phrase("haltausfall", lang), ...stationList(skipped, lang, c));
       if (s.faelltAus) out.push(phrase("faelltAus", lang));
-      if (s.grund) out.push({ label: c.reasonName(s.grund), cands: [`/${lang}/gruende/grund_dafuer/${s.grund}`], kind: "info" });
+      for (const g of (s.gruende || []).filter(Boolean)) {
+        out.push({ label: c.reasonName(g), cands: [`/${lang}/gruende/grund_dafuer/${g}`], kind: "info" });
+      }
       if (s.entschuldigung) out.push(phrase("entschuldigung", lang));
       return out;
     },
@@ -260,8 +275,22 @@
       ];
     },
     sonder(s, lang, c) {
-      if (!s.sonder) return [{ label: "Sonderansage wählen", cands: [], kind: "info" }];
-      return [{ label: c.specialName(s.sonder), cands: [`/${lang}/nza/${s.sonder}`], kind: "info" }];
+      const ids = (s.sonder || []).filter(Boolean);
+      if (!ids.length) return [{ label: "Sonderansage wählen", cands: [], kind: "info" }];
+      return ids.map((id) => ({ label: c.specialName(id), cands: [`/${lang}/nza/${id}`], kind: "info" }));
+    },
+    anschluss(s, lang, c) {
+      const list = s.anschluesse || [];
+      if (!list.length) return [{ label: "Anschluss hinzufügen", cands: [], kind: "info" }];
+      const out = [phrase("anschluesse", lang)];
+      list.forEach((a, i) => {
+        if (i > 0 && i === list.length - 1) out.push(phrase("und", lang));
+        out.push(...train({ gattung: a.gattung, nummer: a.nummer, gattungLabel: c.gattungName(a.gattung) }, lang, false),
+          ...destination(a, lang, c),
+          phrase("abfahrt", lang), ...time(a.zeit, lang),
+          phrase("vonGleis", lang), ...number(a.gleis, lang, "tief"));
+      });
+      return out;
     },
   };
 
