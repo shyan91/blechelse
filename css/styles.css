@@ -205,9 +205,11 @@ select { appearance: none; padding-right: 40px; cursor: pointer;
 .switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 2px; }
 .switch.sm { font-size: 14px; gap: 8px; }
 .field-switch { height: 48px; }
-.coupled { border-left: 3px solid var(--line); padding: 16px 0 0 16px; margin: 12px 0 4px; }
-.coupled .coupled { margin-top: 4px; }
-.group > .switch, .coupled > .switch { margin-bottom: 4px; }
+.train-list { display: flex; flex-direction: column; gap: 12px; }
+.train-card { border-left: 3px solid var(--line); padding: 4px 0 4px 16px; }
+.train-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.train-card-head strong { font-size: 14px; color: var(--muted); font-weight: 700; }
+.train-card .grid { margin-bottom: 0; }
 .switch-row { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 16px; }
 
 /* combobox (station search) */
@@ -226,6 +228,13 @@ select { appearance: none; padding-right: 40px; cursor: pointer;
 .combo-list li:hover, .combo-list li.is-active { background: var(--bg-2); }
 .combo-list li mark { background: transparent; color: inherit; font-weight: 700; }
 .combo-list .combo-empty { color: var(--muted); cursor: default; }
+
+/* station lists (extra / skipped stops) */
+.station-list { display: flex; flex-direction: column; gap: 8px; }
+.sl-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 4px; }
+.sl-remove { height: 48px; border: 0; border-radius: var(--r); background: transparent; color: var(--text-strong); cursor: pointer; display: grid; place-items: center; }
+.sl-remove:hover { background: var(--bg-2); }
+.sl-add { align-self: flex-start; }
 
 /* special announcements: selectable tags */
 .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }

@@ -15,21 +15,34 @@
 
   // ------------------------------------------------------------ state
 
-  const STATION_FIELDS = ["ziel", "via1", "via2", "von", "nurBis", "zusatzhalt", "haltausfall",
-    "mit1Ziel", "mit1Via", "mit2Ziel", "mit2Via", "teil1", "teil2"];
+  const STATION_FIELDS = ["ziel", "via1", "via2", "von", "nurBis",
+  ];
   const DEFAULTS = {
     type: "einfahrt", langs: ["dt"], gong: true, hall: false, gap: 40,
     gattung: "ice", nummer: "1234", ersatz: false,
     ziel: "", via1: "", via2: "", von: "",
     gleis: 7, zeit: "18:59", verspaetet: false, nichtEinsteigen: false,
-    delay: "", grund: "", gleisNeu: "", nurBis: "", zusatzhalt: "", haltausfall: "",
+    delay: "", grund: "", gleisNeu: "", nurBis: "", zusatzhalt: [], haltausfall: [],
     faelltAus: false, entschuldigung: false, sonder: "",
-    mit1: false, mit1Gattung: "ice", mit1Nummer: "", mit1Ziel: "", mit1Via: "",
-    mit2: false, mit2Gattung: "ice", mit2Nummer: "", mit2Ziel: "", mit2Via: "",
-    teilung: false, teil1: "", teil2: "",
+    mit: [],    // coupled trains: [{ gattung, nummer, ziel, via }]
+    teile: [],  // splitting stations
   };
   let state = { ...DEFAULTS };
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")); } catch (_) {}
+  // convert state saved by older versions
+  for (const k of ["zusatzhalt", "haltausfall", "teile"]) {
+    if (!Array.isArray(state[k])) state[k] = state[k] ? [state[k]] : [];
+  }
+  if (!Array.isArray(state.mit)) state.mit = [];
+  if ("mit1" in state) {
+    for (const n of [1, 2]) {
+      if (state.mit1 && state[`mit${n}`]) {
+        state.mit.push({ gattung: state[`mit${n}Gattung`], nummer: state[`mit${n}Nummer`], ziel: state[`mit${n}Ziel`], via: state[`mit${n}Via`] });
+      }
+    }
+    if (state.teilung) state.teile = [state.teil1, state.teil2].filter(Boolean);
+    for (const k of Object.keys(state)) if (/^(mit[12]|teil(ung|[12]))/.test(k)) delete state[k];
+  }
   const save = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {} };
 
   // ------------------------------------------------------------ toast
@@ -167,17 +180,23 @@
     const c = library.catalog;
     if (!c.gattungen.find((g) => g.id === state.gattung)) state.gattung = c.gattungen[0]?.id || "";
     fillSelect($("#f-gattung"), c.gattungen, null, state.gattung);
-    for (const n of [1, 2]) {
-      const k = `mit${n}Gattung`;
-      if (!c.gattungen.find((g) => g.id === state[k])) state[k] = c.gattungen[0]?.id || "";
-      fillSelect($(`#f-${k}`), c.gattungen, null, state[k]);
-    }
+
     fillSelect($("#f-delay"), c.delays, "Keine Angabe", state.delay);
     fillSelect($("#f-grund"), c.reasons, "Kein Grund", state.grund);
 
     // keep stored stations only if they exist in this library
-    for (const f of STATION_FIELDS) {
-      if (state[f] && !c.stationMap.has(state[f])) state[f] = "";
+    // drop saved stations this clip folder doesn't have (only once the station list is loaded)
+    if (c.stations.length) {
+      for (const f of STATION_FIELDS) {
+        if (state[f] && !c.stationMap.has(state[f])) state[f] = "";
+      }
+      for (const k of ["zusatzhalt", "haltausfall", "teile"]) {
+        state[k] = state[k].filter((id) => !id || c.stationMap.has(id));
+      }
+      for (const t of state.mit) {
+        if (t.ziel && !c.stationMap.has(t.ziel)) t.ziel = "";
+        if (t.via && !c.stationMap.has(t.via)) t.via = "";
+      }
     }
     const pickByName = (re) => (c.stations.find((s) => re.test(s.name)) || c.stations[0] || {}).id || "";
     if (!state.ziel) state.ziel = pickByName(/^München Hbf$/);
@@ -216,13 +235,6 @@
   bind("f-gleisNeu", "gleisNeu", "int");
   bind("f-faelltAus", "faelltAus", "checked");
   bind("f-entschuldigung", "entschuldigung", "checked");
-  for (const n of [1, 2]) {
-    bind(`f-mit${n}`, `mit${n}`, "checked");
-    bind(`f-mit${n}Gattung`, `mit${n}Gattung`);
-    bind(`f-mit${n}Nummer`, `mit${n}Nummer`);
-    $(`#f-mit${n}Nummer`).addEventListener("input", (e) => { e.target.value = e.target.value.replace(/\D/g, ""); });
-  }
-  bind("f-teilung", "teilung", "checked");
   bind("o-gong", "gong", "checked");
   bind("o-hall", "hall", "checked");
   bind("o-gap", "gap", "int");
@@ -235,6 +247,8 @@
   }));
 
   function syncInputs() {
+    renderStationLists();
+    renderTrainList();
     $("#f-gattung").value = state.gattung;
     $("#f-nummer").value = state.nummer;
     $("#f-ersatz").checked = state.ersatz;
@@ -247,16 +261,96 @@
     $("#f-gleisNeu").value = state.gleisNeu;
     $("#f-faelltAus").checked = state.faelltAus;
     $("#f-entschuldigung").checked = state.entschuldigung;
-    for (const n of [1, 2]) {
-      $(`#f-mit${n}`).checked = state[`mit${n}`];
-      $(`#f-mit${n}Gattung`).value = state[`mit${n}Gattung`];
-      $(`#f-mit${n}Nummer`).value = state[`mit${n}Nummer`];
-    }
-    $("#f-teilung").checked = state.teilung;
     $("#o-gong").checked = state.gong;
     $("#o-hall").checked = state.hall;
     $("#o-gap").value = state.gap;
     combos.forEach((cb) => cb.set(state[cb.field]));
+    renderStationLists();
+    renderTrainList();
+  }
+
+  // ------------------------------------------------------------ coupled trains (unlimited)
+
+  function renderTrainList() {
+    const box = $("#mit-list");
+    const c = library.catalog;
+    box.innerHTML = "";
+    state.mit.forEach((t, i) => {
+      if (!c.gattungen.find((g) => g.id === t.gattung)) t.gattung = c.gattungen[0]?.id || t.gattung || "";
+      const card = document.createElement("div");
+      card.className = "train-card";
+      card.innerHTML = `
+        <div class="train-card-head"><strong>Zug ${i + 2}</strong>
+          <button type="button" class="btn btn-ghost btn-sm" data-remove><svg><use href="#i-x"/></svg>Entfernen</button></div>
+        <div class="grid g-2">
+          <label class="field"><span>Zuggattung</span><select data-k="gattung"></select></label>
+          <label class="field"><span>Zugnummer</span><input data-k="nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 5678" /></label>
+          <div class="field"><span>Nach</span><div class="combo" data-field="ziel" data-placeholder="Bahnhof suchen …"></div></div>
+          <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="via" data-placeholder="Zwischenhalt" data-clearable></div></div>
+        </div>`;
+      const sel = $("select", card);
+      fillSelect(sel, c.gattungen, null, t.gattung);
+      sel.addEventListener("change", () => { t.gattung = sel.value; changed(); });
+      const nr = $("input[data-k=nummer]", card);
+      nr.value = t.nummer || "";
+      nr.addEventListener("input", () => { nr.value = nr.value.replace(/\D/g, ""); t.nummer = nr.value; changed(); });
+      $$(".combo", card).forEach((el) => {
+        const cb = new Combo(el, (field, id) => { t[field] = id; changed(); });
+        cb.set(t[el.dataset.field]);
+      });
+      $("[data-remove]", card).addEventListener("click", () => {
+        state.mit.splice(i, 1);
+        renderTrainList();
+        changed();
+      });
+      box.appendChild(card);
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "btn btn-secondary btn-sm sl-add";
+    add.innerHTML = `<svg><use href="#i-plus"/></svg>Zug hinzufügen`;
+    add.addEventListener("click", () => {
+      state.mit.push({ gattung: state.gattung, nummer: "", ziel: "", via: "" });
+      renderTrainList();
+      changed();
+      $$(".train-card", box).pop()?.querySelector("input")?.focus();
+    });
+    box.appendChild(add);
+  }
+
+  // ------------------------------------------------------------ station lists (unlimited extra / skipped stops)
+
+  function renderStationLists() {
+    $$(".station-list").forEach((box) => {
+      const key = box.dataset.list;
+      const list = state[key];
+      box.innerHTML = "";
+      list.forEach((id, i) => {
+        const row = document.createElement("div");
+        row.className = "sl-row";
+        row.innerHTML = `<div class="combo" data-field="${key}" data-placeholder="Bahnhof suchen …"></div>
+          <button type="button" class="sl-remove" aria-label="Bahnhof entfernen" title="Entfernen"><svg><use href="#i-x"/></svg></button>`;
+        const cb = new Combo($(".combo", row), (_, newId) => { state[key][i] = newId; changed(); });
+        cb.set(id);
+        $(".sl-remove", row).addEventListener("click", () => {
+          state[key].splice(i, 1);
+          renderStationLists();
+          changed();
+        });
+        box.appendChild(row);
+      });
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "btn btn-secondary btn-sm sl-add";
+      add.innerHTML = `<svg><use href="#i-plus"/></svg>Bahnhof hinzufügen`;
+      add.addEventListener("click", () => {
+        state[key].push("");
+        renderStationLists();
+        changed();
+        $$(".sl-row input", box).pop()?.focus();
+      });
+      box.appendChild(add);
+    });
   }
 
   // ------------------------------------------------------------ languages
@@ -322,22 +416,23 @@
     }
     const coupledRows = [];
     if (["einfahrt", "bereit", "info"].includes(type.id)) {
-      for (const n of [1, 2]) {
-        if (!state[`mit${n}`] || (n === 2 && !state.mit1)) continue;
-        const g = state[`mit${n}Gattung`];
-        coupledRows.push({ g, label: c.gattungName(g), nr: state[`mit${n}Nummer`], to: name(state[`mit${n}Ziel`]) });
+      for (const t of state.mit) {
+        coupledRows.push({ g: t.gattung, label: c.gattungName(t.gattung), nr: t.nummer, to: name(t.ziel) });
       }
     }
-    if (state.teilung && ["einfahrt", "bereit"].includes(type.id)) {
-      const parts = [state.teil1, state.teil2].filter(Boolean).map(name);
-      ticker.push(parts.length ? "Zugteilung in " + parts.join(" und ") : "Zugteilung");
+    const listText = (ids) => {
+      const n = ids.filter(Boolean).map(name);
+      return n.length > 1 ? n.slice(0, -1).join(", ") + " und " + n[n.length - 1] : n[0];
+    };
+    if (state.teile.some(Boolean) && ["einfahrt", "bereit"].includes(type.id)) {
+      ticker.push("Zugteilung in " + listText(state.teile));
     }
     if (type.id === "info") {
       if (state.delay) ticker.push(c.delayName(state.delay).replace(/min\b/, "Min.") + " später");
       if (state.gleisNeu) ticker.push(`Heute von Gleis ${state.gleisNeu}`);
       if (state.nurBis) ticker.push(`Fährt heute nur bis ${name(state.nurBis)}`);
-      if (state.zusatzhalt) ticker.push(`Hält zusätzlich in ${name(state.zusatzhalt)}`);
-      if (state.haltausfall) ticker.push(`Hält nicht in ${name(state.haltausfall)}`);
+      if (state.zusatzhalt.some(Boolean)) ticker.push(`Hält zusätzlich in ${listText(state.zusatzhalt)}`);
+      if (state.haltausfall.some(Boolean)) ticker.push(`Hält nicht in ${listText(state.haltausfall)}`);
       if (state.faelltAus) { ticker.push("Fällt heute aus"); strike = true; }
       if (state.grund) ticker.push("Grund: " + c.reasonName(state.grund));
       if (!ticker.length) ticker.push("Information");
@@ -399,7 +494,6 @@
     $("#type-title").textContent = type.name;
     $("#type-desc").textContent = type.desc;
     $$("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(type.id); });
-    $$("[data-if]").forEach((el) => { el.hidden = !state[el.dataset.if]; });
     $("#zeit-label").textContent = type.id === "ankunft" ? "Ankunft" : "Abfahrt";
     $$("#sonder-grid .chip").forEach((b) => b.classList.toggle("is-active", b.dataset.id === state.sonder));
     $("#o-gap-val").textContent = `${state.gap} ms`;

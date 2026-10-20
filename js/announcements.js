@@ -168,27 +168,31 @@
     return out;
   }
 
-  /** Up to two more trains travelling together with the main one ("zusammen mit ICE 5678 nach ..."). */
+  /** Any number of trains travelling together with the main one ("zusammen mit ICE 5678 nach ..."). */
   function coupled(s, lang, c) {
     const out = [];
-    for (const n of [1, 2]) {
-      if (!s[`mit${n}`] || (n === 2 && !s.mit1)) continue;
-      const g = s[`mit${n}Gattung`];
+    for (const t of s.mit || []) {
       out.push(phrase("mit", lang));
-      out.push(...train({ gattung: g, nummer: s[`mit${n}Nummer`], gattungLabel: c.gattungName(g) }, lang, false));
-      out.push(...destination({ ziel: s[`mit${n}Ziel`], via1: s[`mit${n}Via`] }, lang, c));
+      out.push(...train({ gattung: t.gattung, nummer: t.nummer, gattungLabel: c.gattungName(t.gattung) }, lang, false));
+      out.push(...destination({ ziel: t.ziel, via1: t.via }, lang, c));
     }
     return out;
   }
 
-  /** "Zugteilung in A (und B)" */
-  function splitting(s, lang, c) {
-    if (!s.teilung) return [];
-    const out = [phrase("teilung", lang)];
-    if (s.teil2) out.push(station(s.teil1, lang, MID, c, "Bahnhof wählen"), phrase("und", lang), station(s.teil2, lang, END, c));
-    else out.push(station(s.teil1, lang, END, c, "Bahnhof wählen"));
-    out.push(phrase("teilungEnde", lang));
+  /** A list of stations: "A" or "A, B und C" (all but the last spoken with rising pitch). */
+  function stationList(ids, lang, c) {
+    ids = (ids || []).filter(Boolean);
+    if (ids.length <= 1) return ids.map((id) => station(id, lang, END, c));
+    const out = ids.slice(0, -1).map((id) => station(id, lang, MID, c));
+    out.push(phrase("und", lang), station(ids[ids.length - 1], lang, END, c));
     return out;
+  }
+
+  /** "Zugteilung in A, B und C" (nothing when no splitting station is set) */
+  function splitting(s, lang, c) {
+    const ids = (s.teile || []).filter(Boolean);
+    if (!ids.length) return [];
+    return [phrase("teilung", lang), ...stationList(ids, lang, c), phrase("teilungEnde", lang)];
   }
 
   // ---------------------------------------------------------------- per type
@@ -236,8 +240,10 @@
       if (s.delay) out.push({ label: c.delayName(s.delay), cands: [`/${lang}/zeiten/verspaetung_heute/${s.delay}`], kind: "info" });
       if (s.gleisNeu) out.push(phrase("gleiswechsel", lang), ...number(s.gleisNeu, lang, "hoch"));
       if (s.nurBis) out.push(phrase("nurBis", lang), station(s.nurBis, lang, END, c), phrase("nurBisEnde", lang));
-      if (s.zusatzhalt) out.push(phrase("zusatzhalt", lang), station(s.zusatzhalt, lang, END, c));
-      if (s.haltausfall) out.push(phrase("haltausfall", lang), station(s.haltausfall, lang, END, c));
+      const extra = (s.zusatzhalt || []).filter(Boolean);
+      if (extra.length) out.push(phrase("zusatzhalt", lang), ...stationList(extra, lang, c));
+      const skipped = (s.haltausfall || []).filter(Boolean);
+      if (skipped.length) out.push(phrase("haltausfall", lang), ...stationList(skipped, lang, c));
       if (s.faelltAus) out.push(phrase("faelltAus", lang));
       if (s.grund) out.push({ label: c.reasonName(s.grund), cands: [`/${lang}/gruende/grund_dafuer/${s.grund}`], kind: "info" });
       if (s.entschuldigung) out.push(phrase("entschuldigung", lang));
