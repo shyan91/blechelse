@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blechelse Ansagen-Studio</title>
+  <meta name="description" content="Bahnhofsansagen aus deinen eigenen Blechelse-Clips zusammenstellen, abspielen und als WAV exportieren." />
+  <meta name="theme-color" content="#EC0016" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23EC0016'/%3E%3Cpath d='M8 13h4l6-5v16l-6-5H8z' fill='white'/%3E%3Cpath d='M21 12.5a5 5 0 0 1 0 7M23.5 10a8.5 8.5 0 0 1 0 12' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-train" viewBox="0 0 24 24"><path d="M7 3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z M4 11h16 M8 15h.01 M16 15h.01 M8 18l-2 3 M16 18l2 3"/></symbol>
+      <symbol id="i-arrive" viewBox="0 0 24 24"><path d="M3 17h13a4 4 0 0 0 4-4V9a3 3 0 0 0-3-3H3 M3 11h17 M7 17v3 M14 17v3 M21 20H2"/></symbol>
+      <symbol id="i-ready" viewBox="0 0 24 24"><path d="M12 7v5l3 2 M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M12 11v5 M12 8h.01"/></symbol>
+      <symbol id="i-doors" viewBox="0 0 24 24"><path d="M4 3h16v18H4z M12 3v18 M9 12h.01 M15 12h.01"/></symbol>
+      <symbol id="i-through" viewBox="0 0 24 24"><path d="M2 12h17 M14 6l6 6-6 6 M2 6h5 M2 18h5"/></symbol>
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9h4l6-5v16l-6-5H4z M17.5 8.5a5 5 0 0 1 0 7 M20 6a8.5 8.5 0 0 1 0 12"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12 M7 10l5 5 5-5 M4 20h16"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+      <symbol id="i-dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z M8 8h.01 M16 8h.01 M12 12h.01 M8 16h.01 M16 16h.01"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z M20 20l-4-4"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z M12 10v4 M12 17h.01"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#" aria-label="Blechelse Ansagen-Studio">
+        <span class="brand-mark"><svg viewBox="0 0 24 24"><use href="#i-speaker"/></svg></span>
+        <span class="brand-text"><strong>Blechelse</strong><small>Ansagen-Studio</small></span>
+      </a>
+      <nav class="tabs" role="tablist" aria-label="Bereiche">
+        <button class="tab is-active" role="tab" data-view="generator" aria-selected="true">Ansage</button>
+        <button class="tab" role="tab" data-view="browser" aria-selected="false">Clip-Browser</button>
+      </nav>
+      <div class="topbar-actions">
+        <svg class="station-clock" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="47" class="clock-face"/>
+          <g class="clock-ticks"></g>
+          <line id="clock-h" x1="50" y1="50" x2="50" y2="27" class="clock-hand clock-h"/>
+          <line id="clock-m" x1="50" y1="50" x2="50" y2="14" class="clock-hand clock-m"/>
+          <g id="clock-s"><line x1="50" y1="60" x2="50" y2="22" class="clock-s"/><circle cx="50" cy="22" r="5" class="clock-s-dot"/></g>
+        </svg>
+        <span class="lib-pill" id="lib-pill" title="Geladene Clips"><span class="dot"></span><span id="lib-pill-text">Keine Clips</span></span>
+        <button class="icon-btn" id="theme-btn" title="Hell / Dunkel" aria-label="Farbschema wechseln"><svg><use href="#i-moon"/></svg></button>
+        <button class="btn btn-secondary btn-sm" id="load-btn"><svg><use href="#i-folder"/></svg><span>Clips laden</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============================================ ONBOARDING -->
+    <section id="view-empty" class="view">
+      <div class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Bahnhofsansagen-Generator</span>
+          <h1>Bitte Vorsicht bei der Einfahrt.</h1>
+          <p class="lead">Stell Ansagen aus deinen eigenen Blechelse-Clips zusammen: Einfahrt, Verspätung, Gleiswechsel und mehr. Abspielen mit Bahnhofshall, als WAV exportieren.</p>
+          <p class="muted small">Die Clips werden nicht mitgeliefert. Lade deinen Clip-Ordner, die Dateien bleiben auf deinem Gerät.</p>
+        </div>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Clip-Ordner auswählen oder hierher ziehen">
+          <div class="dz-icon"><svg><use href="#i-folder"/></svg></div>
+          <strong>Clip-Ordner hierher ziehen</strong>
+          <span class="muted">oder</span>
+          <button class="btn btn-primary" id="dz-btn" type="button"><svg><use href="#i-folder"/></svg>Ordner auswählen</button>
+          <div class="dz-progress" id="dz-progress" hidden><div class="spinner"></div><span id="dz-progress-text">Lese Dateien …</span></div>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="step-no">1</span><div><strong>Clips besorgen</strong><p>Zum Beispiel mit <code>blechelse_scraper.py</code>. Der Ordner enthält <code>dt/</code>, <code>en/</code>, <code>fr/</code> und <code>gong/</code>.</p></div></div>
+        <div class="step"><span class="step-no">2</span><div><strong>Ordner laden</strong><p>Liegt eine <code>manifest.json</code> im Ordner, erscheinen Bahnhöfe mit Namen statt mit Nummer.</p></div></div>
+        <div class="step"><span class="step-no">3</span><div><strong>Ansage bauen</strong><p>Zug, Ziel und Gleis wählen, abspielen, als WAV speichern.</p></div></div>
+      </div>
+      <pre class="tree" aria-label="Erwartete Ordnerstruktur">blechelse_wavs/
+├── manifest.json        <span class="muted">optional, liefert Namen</span>
+├── gong/513/513_2.wav
+├── dt/
+│   ├── module/  module_3_1/
+│   ├── ziele/variante1|2/hoch|tief/&lt;Bahnhof&gt;.wav
+│   ├── zuggattungen/hoch/ice.wav …
+│   ├── gleise_zahlen/  zeiten/  gruende/  nza/
+├── en/ …
+└── fr/ …</pre>
+    </section>
+
+    <!-- ============================================ GENERATOR -->
+    <section id="view-generator" class="view" hidden>
+      <div class="type-strip" role="tablist" aria-label="Ansage-Typ" id="type-strip"></div>
+
+      <div class="layout">
+        <!-- form -->
+        <form class="card form" id="form" autocomplete="off" onsubmit="return false">
+          <div class="card-head">
+            <div>
+              <h2 id="type-title">Einfahrt</h2>
+              <p class="muted" id="type-desc"></p>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="random-btn" title="Zufällige Ansage"><svg><use href="#i-dice"/></svg>Zufall</button>
+          </div>
+
+          <fieldset class="group" data-show="einfahrt ankunft bereit info">
+            <legend>Zug</legend>
+            <div class="grid g-3">
+              <label class="field"><span>Zuggattung</span>
+                <select id="f-gattung"></select></label>
+              <label class="field"><span>Zugnummer</span>
+                <input id="f-nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 1234" /></label>
+              <label class="switch field-switch"><input type="checkbox" id="f-ersatz" /><span class="track"></span><span>Ersatzzug</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" data-show="einfahrt bereit info">
+            <legend>Fahrtziel</legend>
+            <div class="grid g-1">
+              <div class="field"><span>Nach</span><div class="combo" data-field="ziel" data-placeholder="Bahnhof suchen …"></div></div>
+            </div>
+            <div class="grid g-2">
+              <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="via1" data-placeholder="Zwischenhalt" data-clearable></div></div>
+              <div class="field"><span>und über <em class="opt">optional</em></span><div class="combo" data-field="via2" data-placeholder="Zwischenhalt" data-clearable></div></div>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" data-show="ankunft">
+            <legend>Herkunft</legend>
+            <div class="field"><span>Von</span><div class="combo" data-field="von" data-placeholder="Bahnhof suchen …"></div></div>
+          </fieldset>
+
+          <fieldset class="group" data-show="einfahrt ankunft bereit info tueren durchfahrt">
+            <legend>Gleis &amp; Zeit</legend>
+            <div class="grid g-3">
+              <label class="field"><span>Gleis</span>
+                <div class="stepper"><button type="button" data-step="-1" aria-label="Gleis minus">−</button><input id="f-gleis" type="number" min="1" max="999" value="1" /><button type="button" data-step="1" aria-label="Gleis plus">+</button></div></label>
+              <label class="field" data-show="einfahrt ankunft bereit info"><span id="zeit-label">Abfahrt</span>
+                <input id="f-zeit" type="time" value="18:59" /></label>
+              <label class="switch field-switch" data-show="einfahrt ankunft"><input type="checkbox" id="f-verspaetet" /><span class="track"></span><span>Verspätet</span></label>
+            </div>
+            <label class="switch" data-show="ankunft"><input type="checkbox" id="f-nichtEinsteigen" /><span class="track"></span><span>Bitte nicht einsteigen</span></label>
+          </fieldset>
+
+          <fieldset class="group" data-show="info">
+            <legend>Information</legend>
+            <div class="grid g-2">
+              <label class="field"><span>Verspätung</span><select id="f-delay"></select></label>
+              <label class="field"><span>Grund</span><select id="f-grund"></select></label>
+              <label class="field"><span>Gleiswechsel auf <em class="opt">optional</em></span><input id="f-gleisNeu" type="number" min="1" max="999" placeholder="—" /></label>
+              <div class="field"><span>Fährt heute nur bis <em class="opt">optional</em></span><div class="combo" data-field="nurBis" data-placeholder="Bahnhof" data-clearable></div></div>
+              <div class="field"><span>Hält zusätzlich in <em class="opt">optional</em></span><div class="combo" data-field="zusatzhalt" data-placeholder="Bahnhof" data-clearable></div></div>
+              <div class="field"><span>Hält nicht in <em class="opt">optional</em></span><div class="combo" data-field="haltausfall" data-placeholder="Bahnhof" data-clearable></div></div>
+            </div>
+            <div class="switch-row">
+              <label class="switch"><input type="checkbox" id="f-faelltAus" /><span class="track"></span><span>Zug fällt aus</span></label>
+              <label class="switch"><input type="checkbox" id="f-entschuldigung" /><span class="track"></span><span>Entschuldigung</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" data-show="sonder">
+            <legend>Sonderansage</legend>
+            <div class="chip-grid" id="sonder-grid"></div>
+          </fieldset>
+
+          <fieldset class="group" data-show="tueren durchfahrt">
+            <p class="muted small" data-show="tueren">Kurze Ansage beim Abfertigen des Zuges, mit eigenem Gong.</p>
+            <p class="muted small" data-show="durchfahrt">Warnung vor einem durchfahrenden Zug. Nur auf Deutsch aufgenommen.</p>
+          </fieldset>
+        </form>
+
+        <!-- preview + player -->
+        <aside class="side">
+          <div class="display" id="display" aria-live="polite">
+            <div class="display-row">
+              <div class="d-time" id="d-time">18:59</div>
+              <div class="d-train"><span class="d-badge" id="d-badge">ICE</span><span id="d-nr">1234</span></div>
+              <div class="d-platform"><small>Gleis</small><span id="d-gleis">1</span></div>
+            </div>
+            <div class="d-via" id="d-via"></div>
+            <div class="d-dest" id="d-dest">—</div>
+            <div class="d-ticker" id="d-ticker" hidden><div class="d-ticker-track"><span id="d-ticker-text"></span></div></div>
+            <div class="d-progress"><div id="d-progress-bar"></div></div>
+          </div>
+
+          <div class="card player">
+            <div class="player-row">
+              <div class="seg" id="lang-seg" role="group" aria-label="Sprachen"></div>
+              <div class="player-toggles">
+                <label class="switch sm"><input type="checkbox" id="o-gong" checked /><span class="track"></span><span>Gong</span></label>
+                <label class="switch sm"><input type="checkbox" id="o-hall" /><span class="track"></span><span>Bahnhofshall</span></label>
+              </div>
+            </div>
+            <label class="range"><span>Pause zwischen Clips <b id="o-gap-val">40 ms</b></span>
+              <input type="range" id="o-gap" min="0" max="400" step="10" value="40" /></label>
+            <div class="player-actions">
+              <button class="btn btn-primary btn-lg" id="play-btn"><svg><use href="#i-play"/></svg><span>Ansage abspielen</span></button>
+              <button class="btn btn-secondary btn-lg icon-only" id="export-btn" title="Als WAV speichern" aria-label="Als WAV speichern"><svg><use href="#i-download"/></svg></button>
+            </div>
+            <p class="warn-line" id="missing-line" hidden><svg><use href="#i-warn"/></svg><span></span></p>
+          </div>
+
+          <div class="card chain-card">
+            <div class="chain-head"><h3>Clip-Kette</h3><span class="muted small" id="chain-count"></span></div>
+            <ol class="chain" id="chain"></ol>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================================ CLIP BROWSER -->
+    <section id="view-browser" class="view" hidden>
+      <div class="card browser">
+        <div class="browser-bar">
+          <label class="search"><svg><use href="#i-search"/></svg><input id="b-search" type="search" placeholder="Clips durchsuchen: Bahnhof, Zuggattung, Pfad …" /></label>
+          <select id="b-cat">
+            <option value="">Alle Kategorien</option>
+            <option value="ziele/">Bahnhöfe</option>
+            <option value="zuggattungen/">Zuggattungen</option>
+            <option value="module">Textbausteine</option>
+            <option value="gleise_zahlen/">Zahlen</option>
+            <option value="zeiten/">Zeiten &amp; Verspätungen</option>
+            <option value="gruende/">Gründe</option>
+            <option value="nza/">Sonderansagen</option>
+            <option value="gong/">Gongs</option>
+          </select>
+          <select id="b-lang">
+            <option value="">Alle Sprachen</option>
+            <option value="dt">Deutsch</option>
+            <option value="en">Englisch</option>
+            <option value="fr">Französisch</option>
+          </select>
+        </div>
+        <div class="browser-meta muted small" id="b-meta"></div>
+        <ul class="clip-list" id="b-list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Blechelse Ansagen-Studio · Inoffizielles Fanprojekt, nicht mit der Deutschen Bahn AG verbunden.</span>
+    <span id="lib-source" class="muted"></span>
+  </footer>
+
+  <div class="drop-overlay" id="drop-overlay" hidden><div><svg><use href="#i-folder"/></svg><strong>Ordner loslassen zum Laden</strong></div></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <input type="file" id="dir-input" webkitdirectory directory multiple hidden />
+
+  <script src="js/announcements.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
