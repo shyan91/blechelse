@@ -2,8 +2,8 @@
 """
 Serve the Blechelse site together with your clip folder.
 
-The clips are not part of this repository. Point this server at the folder you
-downloaded (e.g. with blechelse_scraper.py) and it is served under /clips/:
+The clips are not part of this repository. Point this server at your clip
+folder and it is served under /clips/:
 
     python3 serve.py --clips /path/to/blechelse_wavs
     python3 serve.py --clips ../blechelse_wavs --port 8080 --host 0.0.0.0

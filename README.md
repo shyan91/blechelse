@@ -16,7 +16,7 @@ A web frontend for building German station announcements from Blechelse voice cl
 
 ## Hosting
 
-1. Get the clips, e.g. with `blechelse_scraper.py`. You get a folder like this:
+1. Provide the clip folder. It looks like this:
 
    ```
    blechelse_wavs/

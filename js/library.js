@@ -4,7 +4,7 @@
  *
  * clips/manifest.json lists every clip ("/dt/ziele/variante2/tief/8000105.wav": "Station Berlin Hbf", ...)
  * and supplies readable names for stations, train types, delays, reasons and
- * special announcements. blechelse_scraper.py and serve.py both write it.
+ * special announcements. serve.py can generate it from the files on disk.
  */
 (function () {
   "use strict";
