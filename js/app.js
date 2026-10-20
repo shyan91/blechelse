@@ -90,8 +90,10 @@
       this.input.addEventListener("keydown", (e) => this.key(e));
       this.input.addEventListener("blur", () => setTimeout(() => this.close(), 120));
       this.list.addEventListener("mousedown", (e) => {
+        e.preventDefault();
         const li = e.target.closest("li[data-id]");
-        if (li) { e.preventDefault(); this.pick(li.dataset.id); }
+        if (li) this.pick(li.dataset.id);
+        else this.input.blur(); // e.g. "Kein Bahnhof gefunden": just close
       });
       this.clearBtn?.addEventListener("click", () => { this.pick(""); });
     }
@@ -153,6 +155,7 @@
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (lis[this.active]) this.pick(lis[this.active].dataset.id);
+        else this.close(); // no match: close the list instead of leaving it open
       } else if (e.key === "Escape") {
         this.input.blur();
       }

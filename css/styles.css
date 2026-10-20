@@ -263,7 +263,7 @@ select { appearance: none; padding-right: 40px; cursor: pointer;
 .d-platform { margin-left: auto; display: flex; flex-direction: column; align-items: center; background: #fff; color: var(--navy); border-radius: 2px; min-width: 64px; padding: 4px 10px 6px; line-height: 1; }
 .d-platform small { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4a5a8c; margin-bottom: 3px; }
 .d-platform span { font-size: 32px; font-weight: 700; }
-.d-via { margin-top: 16px; color: var(--navy-dim); font-size: 15px; min-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-via { margin-top: 16px; color: var(--navy-dim); font-size: 15px; min-height: 22px; line-height: 1.4; }
 .d-dest { font-family: var(--font-head); font-size: clamp(28px, 3vw, 38px); font-weight: 700; line-height: 1.15; padding-bottom: 20px; overflow-wrap: anywhere; }
 .d-coupled { margin: -8px 0 0; padding: 0 0 18px; display: flex; flex-direction: column; gap: 6px; }
 .d-coupled div { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; border-top: 1px solid rgba(255,255,255,.18); padding-top: 8px; min-width: 0; }
