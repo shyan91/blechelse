@@ -96,6 +96,39 @@
             </div>
           </fieldset>
 
+          <fieldset class="group" data-show="einfahrt bereit info">
+            <legend>Fährt mit</legend>
+            <label class="switch"><input type="checkbox" id="f-mit1" /><span class="track"></span><span>Weiterer Zug fährt mit</span></label>
+            <div class="coupled" data-if="mit1">
+              <div class="grid g-2">
+                <label class="field"><span>Zuggattung</span><select id="f-mit1Gattung" class="gattung-select"></select></label>
+                <label class="field"><span>Zugnummer</span><input id="f-mit1Nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 5678" /></label>
+                <div class="field"><span>Nach</span><div class="combo" data-field="mit1Ziel" data-placeholder="Bahnhof suchen …"></div></div>
+                <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="mit1Via" data-placeholder="Zwischenhalt" data-clearable></div></div>
+              </div>
+              <label class="switch"><input type="checkbox" id="f-mit2" /><span class="track"></span><span>Dritter Zug fährt mit</span></label>
+              <div class="coupled" data-if="mit2">
+                <div class="grid g-2">
+                  <label class="field"><span>Zuggattung</span><select id="f-mit2Gattung" class="gattung-select"></select></label>
+                  <label class="field"><span>Zugnummer</span><input id="f-mit2Nummer" inputmode="numeric" maxlength="6" placeholder="z. B. 9012" /></label>
+                  <div class="field"><span>Nach</span><div class="combo" data-field="mit2Ziel" data-placeholder="Bahnhof suchen …"></div></div>
+                  <div class="field"><span>Über <em class="opt">optional</em></span><div class="combo" data-field="mit2Via" data-placeholder="Zwischenhalt" data-clearable></div></div>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" data-show="einfahrt bereit">
+            <legend>Zugteilung</legend>
+            <label class="switch"><input type="checkbox" id="f-teilung" /><span class="track"></span><span>Zug wird geteilt</span></label>
+            <div class="coupled" data-if="teilung">
+              <div class="grid g-2">
+                <div class="field"><span>Teilung in</span><div class="combo" data-field="teil1" data-placeholder="Bahnhof suchen …"></div></div>
+                <div class="field"><span>und in <em class="opt">optional</em></span><div class="combo" data-field="teil2" data-placeholder="Bahnhof" data-clearable></div></div>
+              </div>
+            </div>
+          </fieldset>
+
           <fieldset class="group" data-show="ankunft">
             <legend>Herkunft</legend>
             <div class="field"><span>Von</span><div class="combo" data-field="von" data-placeholder="Bahnhof suchen …"></div></div>
@@ -150,6 +183,7 @@
             </div>
             <div class="d-via" id="d-via"></div>
             <div class="d-dest" id="d-dest">—</div>
+            <div class="d-coupled" id="d-coupled" hidden></div>
             <div class="d-ticker" id="d-ticker" hidden><div class="d-ticker-track"><span id="d-ticker-text"></span></div></div>
             <div class="d-progress"><div id="d-progress-bar"></div></div>
           </div>

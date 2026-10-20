@@ -47,7 +47,14 @@
   /** Load every clip of the chain or throw MissingClipsError listing the ones that failed. */
   async function loadAll(library, chain) {
     const buffers = await Promise.all(chain.map((it) => decodeItem(library, it)));
-    const missing = chain.filter((_, i) => !buffers[i]);
+    const seen = new Set();
+    const missing = chain.filter((it, i) => {
+      if (buffers[i]) return false;
+      const key = it.cands[0] || it.label;
+      if (seen.has(key)) return false; // name each missing clip once
+      seen.add(key);
+      return true;
+    });
     if (missing.length) throw new MissingClipsError(missing);
     return buffers;
   }

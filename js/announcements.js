@@ -33,6 +33,9 @@
     haltausfall:     { f: "module_3_1", dt: "022",  en: "038",  label: "hält nicht in" },
     faelltAus:       { f: "module_3_1", dt: "014",  en: "015",  label: "fällt heute aus" },
     entschuldigung:  { f: "module_3_1", dt: "042",  en: "036",  label: "Entschuldigung" },
+    mit:             { f: "module_3_1", dt: "031",  en: "039",  label: "zusammen mit" },
+    teilung:         { f: "module_3_1", dt: "045",  en: "030",  label: "Zugteilung in" },
+    teilungEnde:     { f: "module_3_1", dt: "015",  en: "000",  label: "(Zugteilung)" },
     tuerenGleis:     { f: "module",     dt: "0048", en: "0021", label: "Am Gleis" },
     tuerenEnde:      { f: "module",     dt: "0011", en: "0029", label: "Türen schließen" },
     durchfahrt1:     { f: "module",     dt: "0153", en: null,   label: "Gleis" },
@@ -165,6 +168,29 @@
     return out;
   }
 
+  /** Up to two more trains travelling together with the main one ("zusammen mit ICE 5678 nach ..."). */
+  function coupled(s, lang, c) {
+    const out = [];
+    for (const n of [1, 2]) {
+      if (!s[`mit${n}`] || (n === 2 && !s.mit1)) continue;
+      const g = s[`mit${n}Gattung`];
+      out.push(phrase("mit", lang));
+      out.push(...train({ gattung: g, nummer: s[`mit${n}Nummer`], gattungLabel: c.gattungName(g) }, lang, false));
+      out.push(...destination({ ziel: s[`mit${n}Ziel`], via1: s[`mit${n}Via`] }, lang, c));
+    }
+    return out;
+  }
+
+  /** "Zugteilung in A (und B)" */
+  function splitting(s, lang, c) {
+    if (!s.teilung) return [];
+    const out = [phrase("teilung", lang)];
+    if (s.teil2) out.push(station(s.teil1, lang, MID, c, "Bahnhof wählen"), phrase("und", lang), station(s.teil2, lang, END, c));
+    else out.push(station(s.teil1, lang, END, c, "Bahnhof wählen"));
+    out.push(phrase("teilungEnde", lang));
+    return out;
+  }
+
   // ---------------------------------------------------------------- per type
 
   const BUILD = {
@@ -173,7 +199,9 @@
         phrase("gleis", lang), ...number(s.gleis, lang, "hoch"),
         phrase("einfahrt", lang), ...train(s, lang, true),
         ...destination(s, lang, c),
+        ...coupled(s, lang, c),
         phrase(s.verspaetet ? "abfahrtUrspr" : "abfahrt", lang), ...time(s.zeit, lang),
+        ...splitting(s, lang, c),
         phrase("vorsicht", lang),
       ];
     },
@@ -193,13 +221,16 @@
         phrase("gleis", lang), ...number(s.gleis, lang, "hoch"),
         phrase("steht", lang), ...train(s, lang, true),
         ...destination(s, lang, c),
+        ...coupled(s, lang, c),
         phrase("abfahrt", lang), ...time(s.zeit, lang),
+        ...splitting(s, lang, c),
       ];
     },
     info(s, lang, c) {
       const out = [
         phrase("info", lang), ...train(s, lang, true),
         ...destination(s, lang, c),
+        ...coupled(s, lang, c),
         phrase("abfahrt", lang), ...time(s.zeit, lang),
       ];
       if (s.delay) out.push({ label: c.delayName(s.delay), cands: [`/${lang}/zeiten/verspaetung_heute/${s.delay}`], kind: "info" });

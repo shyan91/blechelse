@@ -15,6 +15,8 @@
 
   // ------------------------------------------------------------ state
 
+  const STATION_FIELDS = ["ziel", "via1", "via2", "von", "nurBis", "zusatzhalt", "haltausfall",
+    "mit1Ziel", "mit1Via", "mit2Ziel", "mit2Via", "teil1", "teil2"];
   const DEFAULTS = {
     type: "einfahrt", langs: ["dt"], gong: true, hall: false, gap: 40,
     gattung: "ice", nummer: "1234", ersatz: false,
@@ -22,6 +24,9 @@
     gleis: 7, zeit: "18:59", verspaetet: false, nichtEinsteigen: false,
     delay: "", grund: "", gleisNeu: "", nurBis: "", zusatzhalt: "", haltausfall: "",
     faelltAus: false, entschuldigung: false, sonder: "",
+    mit1: false, mit1Gattung: "ice", mit1Nummer: "", mit1Ziel: "", mit1Via: "",
+    mit2: false, mit2Gattung: "ice", mit2Nummer: "", mit2Ziel: "", mit2Via: "",
+    teilung: false, teil1: "", teil2: "",
   };
   let state = { ...DEFAULTS };
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")); } catch (_) {}
@@ -162,11 +167,16 @@
     const c = library.catalog;
     if (!c.gattungen.find((g) => g.id === state.gattung)) state.gattung = c.gattungen[0]?.id || "";
     fillSelect($("#f-gattung"), c.gattungen, null, state.gattung);
+    for (const n of [1, 2]) {
+      const k = `mit${n}Gattung`;
+      if (!c.gattungen.find((g) => g.id === state[k])) state[k] = c.gattungen[0]?.id || "";
+      fillSelect($(`#f-${k}`), c.gattungen, null, state[k]);
+    }
     fillSelect($("#f-delay"), c.delays, "Keine Angabe", state.delay);
     fillSelect($("#f-grund"), c.reasons, "Kein Grund", state.grund);
 
     // keep stored stations only if they exist in this library
-    for (const f of ["ziel", "via1", "via2", "von", "nurBis", "zusatzhalt", "haltausfall"]) {
+    for (const f of STATION_FIELDS) {
       if (state[f] && !c.stationMap.has(state[f])) state[f] = "";
     }
     const pickByName = (re) => (c.stations.find((s) => re.test(s.name)) || c.stations[0] || {}).id || "";
@@ -206,6 +216,13 @@
   bind("f-gleisNeu", "gleisNeu", "int");
   bind("f-faelltAus", "faelltAus", "checked");
   bind("f-entschuldigung", "entschuldigung", "checked");
+  for (const n of [1, 2]) {
+    bind(`f-mit${n}`, `mit${n}`, "checked");
+    bind(`f-mit${n}Gattung`, `mit${n}Gattung`);
+    bind(`f-mit${n}Nummer`, `mit${n}Nummer`);
+    $(`#f-mit${n}Nummer`).addEventListener("input", (e) => { e.target.value = e.target.value.replace(/\D/g, ""); });
+  }
+  bind("f-teilung", "teilung", "checked");
   bind("o-gong", "gong", "checked");
   bind("o-hall", "hall", "checked");
   bind("o-gap", "gap", "int");
@@ -230,6 +247,12 @@
     $("#f-gleisNeu").value = state.gleisNeu;
     $("#f-faelltAus").checked = state.faelltAus;
     $("#f-entschuldigung").checked = state.entschuldigung;
+    for (const n of [1, 2]) {
+      $(`#f-mit${n}`).checked = state[`mit${n}`];
+      $(`#f-mit${n}Gattung`).value = state[`mit${n}Gattung`];
+      $(`#f-mit${n}Nummer`).value = state[`mit${n}Nummer`];
+    }
+    $("#f-teilung").checked = state.teilung;
     $("#o-gong").checked = state.gong;
     $("#o-hall").checked = state.hall;
     $("#o-gap").value = state.gap;
@@ -297,6 +320,18 @@
         time = hhmm(); showTrain = false; via = "Hinweis"; dest = state.sonder ? c.specialName(state.sonder) : "—";
         break;
     }
+    const coupledRows = [];
+    if (["einfahrt", "bereit", "info"].includes(type.id)) {
+      for (const n of [1, 2]) {
+        if (!state[`mit${n}`] || (n === 2 && !state.mit1)) continue;
+        const g = state[`mit${n}Gattung`];
+        coupledRows.push({ g, label: c.gattungName(g), nr: state[`mit${n}Nummer`], to: name(state[`mit${n}Ziel`]) });
+      }
+    }
+    if (state.teilung && ["einfahrt", "bereit"].includes(type.id)) {
+      const parts = [state.teil1, state.teil2].filter(Boolean).map(name);
+      ticker.push(parts.length ? "Zugteilung in " + parts.join(" und ") : "Zugteilung");
+    }
     if (type.id === "info") {
       if (state.delay) ticker.push(c.delayName(state.delay).replace(/min\b/, "Min.") + " später");
       if (state.gleisNeu) ticker.push(`Heute von Gleis ${state.gleisNeu}`);
@@ -320,6 +355,12 @@
     const d = $("#d-dest");
     d.textContent = dest || "—";
     d.classList.toggle("is-strike", strike);
+    const coupledEl = $("#d-coupled");
+    coupledEl.hidden = !coupledRows.length;
+    coupledEl.innerHTML = coupledRows.map((r) => {
+      const cls = r.g === "s" ? " is-sbahn" : REGIO.has(r.g) ? " is-regio" : "";
+      return `<div><span class="d-badge${cls}">${esc(r.label)}</span><span class="nr">${esc(r.nr || "")}</span><span class="to">${esc(r.to)}</span></div>`;
+    }).join("");
     const tick = $("#d-ticker");
     tick.hidden = !ticker.length;
     const text = ticker.length ? "+++ " + ticker.join(" +++ ") + " +++" : "";
@@ -358,6 +399,7 @@
     $("#type-title").textContent = type.name;
     $("#type-desc").textContent = type.desc;
     $$("[data-show]").forEach((el) => { el.hidden = !el.dataset.show.split(" ").includes(type.id); });
+    $$("[data-if]").forEach((el) => { el.hidden = !state[el.dataset.if]; });
     $("#zeit-label").textContent = type.id === "ankunft" ? "Ankunft" : "Abfahrt";
     $$("#sonder-grid .chip").forEach((b) => b.classList.toggle("is-active", b.dataset.id === state.sonder));
     $("#o-gap-val").textContent = `${state.gap} ms`;
