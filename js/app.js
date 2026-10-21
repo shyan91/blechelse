@@ -171,7 +171,12 @@
   // single-station fields in the static form (Nach, Von, Nur bis)
   const combos = $$("form > fieldset .combo, form .grid .combo")
     .filter((c) => !c.closest(".station-list, .train-list"))
-    .map((root) => new Combo(root, (field, id) => { state[field] = id; changed(); }));
+    .map((root) => new Combo(root, (field, id) => {
+      state[field] = id;
+      // a field can appear in several types' forms (Nur bis: Einfahrt + Information); keep the copies in sync
+      combos.forEach((cb) => { if (cb.field === field && cb.root !== root) cb.set(id); });
+      changed();
+    }));
 
   // ------------------------------------------------------------ list editors (unlimited entries)
 
@@ -454,6 +459,7 @@
         dest = name(state.ziel);
         if (type.id === "bereit") ticker.push("Zug steht bereit");
         if (state.verspaetet && type.id === "einfahrt") ticker.push("Verspätung");
+        if (state.nurBis && type.id === "einfahrt") ticker.push(`Fährt heute nur bis ${name(state.nurBis)}`);
         rows = state.mit.map((t) => ({ g: t.gattung, nr: t.nummer, to: name(t.ziel) }));
         if (state.teile.some(Boolean) && type.id !== "info") ticker.push("Zugteilung in " + listText(state.teile));
         break;

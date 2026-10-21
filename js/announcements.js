@@ -210,6 +210,7 @@
         ...coupled(s, lang, c),
         phrase(s.verspaetet ? "abfahrtUrspr" : "abfahrt", lang), ...time(s.zeit, lang),
         ...splitting(s, lang, c),
+        ...(s.nurBis ? [phrase("nurBis", lang), station(s.nurBis, lang, END, c), phrase("nurBisEnde", lang)] : []),
         phrase("vorsicht", lang),
       ];
     },
